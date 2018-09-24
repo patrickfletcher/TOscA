@@ -1,8 +1,8 @@
-classdef OscAr<handle
-    %TRACEANALYZER TraceAnalyzer is a graphical interface for performing
+classdef TOscA<handle
+    %TOSCA TOscA is a graphical interface for performing
     %processing and feature extraction on timeseries data. 
     
-    %TOscA - Timeseries Oscillation Analyzer
+    %TOscA - Timeseries Oscillation Analysis tool
     
     %TODO: raw/normalized data - for any feature with units of X eg. ratio
     %      vs filtered/rescaled/etc - for period/plateau detection
@@ -62,7 +62,7 @@ classdef OscAr<handle
     
     %constructor
     methods
-        function app=OscAr(data,tCond)
+        function app=TOscA(data,tCond)
             %assume data is either filename, or data matrix [t,X], columns
             %are observations.
             
