@@ -101,57 +101,61 @@ end
 
 %remove downward transitions that are outside the first or last upward
 %transition
-firstIsDown=arrayfun(@(x) x.tDown(1)<x.tUp(1),trace);
-lastIsDown=arrayfun(@(x) x.tDown(end)>x.tUp(end),trace);
 
-idx=find(firstIsDown);
-for j=idx
-    trace(j).iDown=trace(j).iDown(2:end);
-    trace(j).tDown=trace(j).tDown(2:end);
-    trace(j).xDown=trace(j).xDown(2:end);
-end
-idx=find(lastIsDown);
-for j=idx
-    trace(j).iDown=trace(j).iDown(1:end-1);
-    trace(j).tDown=trace(j).tDown(1:end-1);
-    trace(j).xDown=trace(j).xDown(1:end-1);
-end
+numUp=arrayfun(@(x) length(x.tUp),trace);
+
+% firstIsDown=arrayfun(@(x) x.tDown(1)<x.tUp(1),trace);
+% lastIsDown=arrayfun(@(x) x.tDown(end)>x.tUp(end),trace);
+
+% idx=find(firstIsDown);
+% for j=idx
+%     trace(j).iDown=trace(j).iDown(2:end);
+%     trace(j).tDown=trace(j).tDown(2:end);
+%     trace(j).xDown=trace(j).xDown(2:end);
+% end
+% idx=find(lastIsDown);
+% for j=idx
+%     trace(j).iDown=trace(j).iDown(1:end-1);
+%     trace(j).tDown=trace(j).tDown(1:end-1);
+%     trace(j).xDown=trace(j).xDown(1:end-1);
+% end
 
 %append trace dependent info?
 
 %features
-for i=1:nX
-    nT=length(trace(i).tUp)-1;
-    features(i).T=diff(trace(i).tUp);
-    features(i).APD=trace(i).tDown-trace(i).tUp(1:end-1); %active phase duration
-    features(i).PF=features(i).APD/features(i).T;
-    for j=1:nT
-        tt=trace(i).iUp(j):trace(i).iUp(j+1)-1;
-        [xmax,imax]=max(X(tt,i));
-        trace(i).iMax(j)=imax;
-        trace(i).tMax(j)=t(tt(imax));
-        trace(i).xMax(j)=xmax;
-        
-        [xmin,imin]=min(X(tt,i));
-        trace(i).iMin(j)=imin;
-        trace(i).tMin(j)=t(tt(imin));
-        trace(i).xMin(j)=xmin;
-        
-        [dxmax,idxmax]=max(DX(tt,i));
-        trace(i).iDXMax(j)=idxmax;
-        trace(i).tDXMax(j)=t(tt(idxmax));
-        trace(i).xDXMax(j)=X(tt(idxmax),i);
-        trace(i).dxMax(j)=dxmax;
-        
-        [dxmin,idxmin]=min(DX(tt,i));
-        trace(i).iDXMin(j)=idxmin;
-        trace(i).tDXMin(j)=t(tt(idxmin));
-        trace(i).xDXMin(j)=X(tt(idxmin),i);
-        trace(i).dxMin(j)=dxmin;
-        
-        features(i).amp(j)=xmax-xmin;
-    end
-end
+% for i=1:nX
+%     nT=length(trace(i).tUp)-1;
+%     features(i).T=diff(trace(i).tUp);
+%     features(i).APD=trace(i).tDown-trace(i).tUp(1:end-1); %active phase duration
+%     features(i).PF=features(i).APD/features(i).T;
+%     for j=1:nT
+%         tt=trace(i).iUp(j):trace(i).iUp(j+1)-1;
+%         [xmax,imax]=max(X(tt,i));
+%         trace(i).iMax(j)=imax;
+%         trace(i).tMax(j)=t(tt(imax));
+%         trace(i).xMax(j)=xmax;
+%         
+%         [xmin,imin]=min(X(tt,i));
+%         trace(i).iMin(j)=imin;
+%         trace(i).tMin(j)=t(tt(imin));
+%         trace(i).xMin(j)=xmin;
+%         
+%         [dxmax,idxmax]=max(DX(tt,i));
+%         trace(i).iDXMax(j)=idxmax;
+%         trace(i).tDXMax(j)=t(tt(idxmax));
+%         trace(i).xDXMax(j)=X(tt(idxmax),i);
+%         trace(i).dxMax(j)=dxmax;
+%         
+%         [dxmin,idxmin]=min(DX(tt,i));
+%         trace(i).iDXMin(j)=idxmin;
+%         trace(i).tDXMin(j)=t(tt(idxmin));
+%         trace(i).xDXMin(j)=X(tt(idxmin),i);
+%         trace(i).dxMin(j)=dxmin;
+%         
+%         features(i).amp(j)=xmax-xmin;
+%     end
+% end
+features=[];
 
 
 %plot to show performance

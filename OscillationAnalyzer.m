@@ -1,12 +1,9 @@
-classdef TOscA<handle
-    %TOSCA TOscA is a graphical interface for performing
+classdef OscillationAnalyzer<handle
+    %OscillationAnalyzer is a graphical interface for performing
     %processing and feature extraction on timeseries data. 
     
     %TOscA - Timeseries Oscillation Analysis tool
     
-    %TODO: raw/normalized data - for any feature with units of X eg. ratio
-    %      vs filtered/rescaled/etc - for period/plateau detection
-    % - set of normalization options, set of filtering options?
     
     %data and processing properties
     properties
@@ -16,8 +13,12 @@ classdef TOscA<handle
         t
         dt
         fs
+        
+        condTimes
+        condNames
         tIntervals
-        tIntOmit
+        tOmit=0
+        nOmit=0
         
         Xraw
         Xnorm
@@ -25,7 +26,7 @@ classdef TOscA<handle
         Xfilt
         nTraces
         
-        thrPrct=[25,75]
+        thrPrct=[0,100]
         thrFrac=[0.5,0.4]
         Thi=1
         Tlo=20
@@ -53,16 +54,11 @@ classdef TOscA<handle
         hLfilt
         filtRange
         
-        hMarksR %markers for special points
-        hMarksN
-        hMarksF
-        hThrUp
-        hThrDown
     end
     
     %constructor
     methods
-        function app=TOscA(data,tCond)
+        function app=OscillationAnalyzer(data,tCond)
             %assume data is either filename, or data matrix [t,X], columns
             %are observations.
             
@@ -74,8 +70,17 @@ classdef TOscA<handle
                 app.loadData();
                 tCond=[]; %need to be able to set this
             else
-                app.t=data(:,1);
-                app.Xraw=data(:,2:end);
+                if isnumeric(data)
+                    app.t=data(:,1);
+                    app.Xraw=data(:,2:end);
+                else
+                    filename=data;
+                    app.loadData(filename);
+                end
+                
+                if ~exist('tCond','var')
+                    tCond=[];
+                end
             end
             
             app.setParams();
@@ -86,18 +91,17 @@ classdef TOscA<handle
             %set up time intervals
             %TODO: adjustable endpoints - omit first bit of each interval?
             %TODO: use omitted data for smoothing, or just mirror for edge?
-            tOmit=0;
+%             tOmit=0;
+            app.nOmit=round(app.tOmit/app.dt); 
             tCond=[app.t(1),tCond(:)',app.t(end)];
             for i=1:length(tCond)-1
                 app.tIntervals(i,:)=[tCond(i),tCond(i+1)];
-                app.tIntOmit(i,:)=[tCond(i)+tOmit,tCond(i+1)];
             end
             
             app.nTraces=size(app.Xraw,2);
             
             app.buildGUI(); %set up display elements
-            app.processData(); %to get Xfilt
-            app.getFeatures();
+            app.processData(); 
             app.plotData(); %populate the axes
         end
     end
@@ -114,52 +118,48 @@ classdef TOscA<handle
             
             for i=1:size(app.tIntervals,1)
                 ix=app.t>=app.tIntervals(i,1)&app.t<=app.tIntervals(i,2); %both have = to catch last point...
+
+% ix=true(size(app.t));
+% 
                 XRAW=app.Xraw(ix,:);
                 
                 %normailze
+%                 XNORM=XRAW;
                 XNORM=XRAW./mean(XRAW,1);
+%                 XNORM=XRAW./median(XRAW,1);
                 
                 %detrend
-                pars.trend.method='lowpass'; %for better filter design options than moving average
-                pars.trend.fpass=1/app.Tlo;%cutoff period for lowpass to create smoothed traces as trend
-                [XDT,XT]=detrend(app.t,XNORM,pars);
+%                 method='none';
+%                 methodpar=[];
+%                 method='lowpass'; %for better filter design options than moving average
+%                 methodpar=1/app.Tlo;%cutoff period for lowpass to create smoothed traces as trend
+                method='gaussian'; %for better filter design options than moving average
+                methodpar=app.Tlo;
+                [XDT,XT]=detrendTraces(app.t,XNORM,method,methodpar);
                 
                 %filter
-                %lowpass only
-                XFILT=lowpass(XDT,1/app.Thi,app.fs);
-                
-                %bandpass method 1
-                %                 wszTrend=13;
-                %                 wszLP=1;
-                %                 wszTrend=round(wszTrend/app.dt);
-                %                 wszTrend=max(wszTrend,3);
-                %                 wszLP=round(wszLP/app.dt);
-                %                 wszLP=max(wszLP,3);
-                %                 XTrend=smoothdata(XRAW,method,wszTrend);
-                %                 XHP=XRAW-XTrend;
-                %                 XFILT=smoothdata(XHP,method,wszLP);
-                
-                %bandpass method 2
-%                 T1=12; T2=1;
-%                 fpass=[1/T1,1/T2]; %Hz
-%                 XFILT=bandpass(XRAW,fpass,app.fs,'Steepness',0.5,'ImpulseResponse','iir');
-                
+%                 method='none';
+%                 methodpar=[];
+                method='gaussian'; %for better filter design options than moving average
+                methodpar=app.Thi;
+                XFILT=filterTraces(app.t,XDT,method,methodpar);
+               
                 
                 %final normalization useful for getting ap/sp/period
-%                 maxX=max(XLP,[],1);
-%                 minX=min(XLP,[],1);
-%                 XFILT=(XFILT-minX)./abs(maxX-minX);
+%                 XFILT=(XFILT-mean(XFILT,1));
 
+%                 XFILT=(XFILT-median(XFILT,1));
+                
 %                 p=prctile(XFILT,[25,75],1);
 %                 p=prctile(XFILT,[5,95],1);
 %                 p=prctile(XFILT,[2.5,97.5],1);
-                p=prctile(XFILT,[0,100],1);
+%                 p=prctile(XFILT,[0,100],1);
+                p=prctile(XFILT(1+app.nOmit:end,:),[0,100],1);
 %                 p=prctile(XFILT,app.thrPrct,1);
                 XFILT=(XFILT-p(1,:))./abs(p(2,:)-p(1,:));
+                XFILT(XFILT<0)=0;
+                XFILT(XFILT>1)=1;
                 app.filtRange=p;
-                
-%                 meanX=mean(XFILT,1);
-%                 XFILT=(XFILT-meanX);
                 
                 %envelope detection and amplitude normalization
 %                 wszTrend=20;
@@ -171,14 +171,9 @@ classdef TOscA<handle
                 
                 app.Xnorm(ix,:)=XDT;
                 app.Xfilt(ix,:)=XFILT;
-                
-                %                 ixOmit=find(app.t>=app.tIntOmit(i,1)&app.t<=app.tIntOmit(i,2));
-                %                 app.Xfilt(ixOmit,:)=XLP(ixOmit,:);
             end
-        end
-        
-        %threshold-based feature detection
-        function getFeatures(app)
+            
+            
             %use Xfilt to find time features (up/down transitions)
             %use Xraw then for max/min in up/down phases.
             %alt: use Xfilt max/min times, but use Xraw values.
@@ -197,7 +192,8 @@ classdef TOscA<handle
             % - variance propagation through computed values?
             
             %run plateau detector on full processed trace, partition events into intervals
-            [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac,'ThresholdPercentiles',app.thrPrct);
+            [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac);
+%             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac,'ThresholdPercentiles',app.thrPrct);
             for i=1:app.nTraces
                 if ~isempty(Pts(i).tUp)
                 Pts(i).xUpR=interp1(app.t,app.Xraw(:,i),Pts(i).tUp);
@@ -261,10 +257,7 @@ classdef TOscA<handle
         function setParams(app)
         end
         
-        %rerun analysis and plot data (eg after changing params)
-        function updateAll(app)
-            app.processData(); %to get Xfilt
-            app.plotData(); %populate the axes
+        function updateTimeIntervals(app)
         end
         
         %set up all the graphical components of the UI
@@ -279,14 +272,17 @@ classdef TOscA<handle
         end
         
         function plotData(app)
+            cla(app.hAxRaw);
             app.hLraw=plot(app.hAxRaw,app.t,app.Xraw,'color',app.lightgray,'LineWidth',app.bgLineWidth); 
+            cla(app.hAxNorm);
             app.hLnorm=plot(app.hAxNorm,app.t,app.Xnorm,'color',app.lightgray,'LineWidth',app.bgLineWidth);
+            cla(app.hAxFilt);
             app.hLfilt=plot(app.hAxFilt,app.t,app.Xfilt,'color',app.lightgray,'LineWidth',app.bgLineWidth); 
             
             ylabel(app.hAxRaw,'Xraw')
             axis(app.hAxRaw,'tight')
             
-            ylabel(app.hAxNorm,'Xnorm')
+            ylabel(app.hAxNorm,'Xnorm,detrend')
             axis(app.hAxNorm,'tight')
             
             xlabel(app.hAxFilt,'Time')
@@ -330,41 +326,25 @@ classdef TOscA<handle
             app.hLfilt(app.tix).LineWidth=app.boldLineWidth;
             app.hLfilt(app.tix).ZData=ones(size(app.t));
             
-            delete(app.hMarksR)
-            delete(app.hMarksN)
-            delete(app.hMarksF)
-            delete(app.hThrUp)
-            delete(app.hThrDown)
-            
-            hup=[]; hdwn=[];
+            delete(findobj(app.hFig,'Tag','spMarks'))
             
             for interval=1:size(app.tIntervals,1)
                 Pts=app.trace{interval}.points(app.tix);
                 
                 if ~isempty(Pts.tUp)
-                    hup=plot(app.hAxRaw,Pts.tUp,Pts.xUpR,'bs');
-                    app.hMarksR=[app.hMarksR,hup];
-                    
-                    hup=plot(app.hAxNorm,Pts.tUp,Pts.xUpN,'bs');
-                    app.hMarksN=[app.hMarksN,hup];
-                    
-                    hup=plot(app.hAxFilt,Pts.tUp,Pts.xUp,'bs');
-                    app.hMarksF=[app.hMarksF,hup];
+                    plot(app.hAxRaw,Pts.tUp,Pts.xUpR,'bs','Tag','spMarks');
+                    plot(app.hAxNorm,Pts.tUp,Pts.xUpN,'bs','Tag','spMarks');
+                    plot(app.hAxFilt,Pts.tUp,Pts.xUp,'bs','Tag','spMarks');
                     thrUp=Pts.xUp(1);
-                    app.hThrUp=plot(app.hAxFilt,xlim(),thrUp*[1,1],'r--');
+                    plot(app.hAxFilt,xlim(),thrUp*[1,1],'r--','Tag','spMarks');
                 end
                 if ~isempty(Pts.tDown)
-                    hdwn=plot(app.hAxRaw,Pts.tDown,Pts.xDownR,'bo');
-                    app.hMarksR=[app.hMarksR,hdwn];
-                    
-                    hdwn=plot(app.hAxNorm,Pts.tDown,Pts.xDownN,'bo');
-                    app.hMarksN=[app.hMarksN,hdwn];
-                    
-                    hdwn=plot(app.hAxFilt,Pts.tDown,Pts.xDown,'bo');
-                    app.hMarksF=[app.hMarksF,hdwn];
+                    plot(app.hAxRaw,Pts.tDown,Pts.xDownR,'bo','Tag','spMarks');
+                    plot(app.hAxNorm,Pts.tDown,Pts.xDownN,'bo','Tag','spMarks');
+                    plot(app.hAxFilt,Pts.tDown,Pts.xDown,'bo','Tag','spMarks');
                     thrDown=Pts.xDown(1);
                     if thrUp~=thrDown
-                        app.hThrDown=plot(xlim(),thrDown*[1,1],'b--');
+                        plot(app.hAxFilt,xlim(),thrDown*[1,1],'b--','Tag','spMarks');
                     end
                 end
 
@@ -395,11 +375,18 @@ classdef TOscA<handle
                         app.updateCurrentTrace();
                     end
                 case {'p'}
-                    disp('change params')
+                    disp('processing data...')
+                    app.processData();
+                    app.plotData();
+                    
+                case {'t'}
+                    
+                    
+                case {'l'}
+                    app.loadData();
+                    
                 case {'s'}
                     disp('save placeholder')
-                case {'l'}
-                    disp('load placeholder')
                     
             end
         end
@@ -460,7 +447,9 @@ classdef TOscA<handle
         
         %save results/params: MAT + XLS? ask for save name
         function saveResults(app)
-            %collect results for writing to file
+            %collect results into a table for writing to file
+            
+            
             %uiputfile
         end
     end
