@@ -1,6 +1,6 @@
 function [time,X,opts]=loadData(filename)
 
-if ~exist('filename','var')&&~isempty(filename)
+if ~exist('filename','var')||isempty(filename)
     [filename,path]=uigetfile({'*.xls*'});
     filename=[path,filename];
 end

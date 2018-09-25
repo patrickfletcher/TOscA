@@ -33,12 +33,11 @@ P2=Y.*conj(Y)/(fs*L);
 P1=P2(1:n/2,:);
 P1(2:end-1,:)=2*P1(2:end-1,:);
 
-[Pmax,ix]=max(P1);
-
+[Pmax,ix]=max(P1,[],1);
 fmax=f(ix);
 
 if nargout==0
-figure(figID);
+    
 plot(f,pow2db(P1),'LineWidth',1); 
 % set(gca,'yscale','log')
 xlim([0,1.5])

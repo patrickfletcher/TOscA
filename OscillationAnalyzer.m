@@ -171,8 +171,17 @@ classdef OscillationAnalyzer<handle
                 
                 app.Xnorm(ix,:)=XDT;
                 app.Xfilt(ix,:)=XFILT;
+                
+                [P,f,Pmax,fmax]=powerSpectrum(XFILT-mean(XFILT,1),app.fs);
+                app.trace{i}.Tpsd=1./fmax;
+                app.trace{i}.Ppsd=Pmax;
             end
             
+            app.getFeatures();
+            
+        end
+        
+        function getFeatures(app)
             
             %use Xfilt to find time features (up/down transitions)
             %use Xraw then for max/min in up/down phases.
@@ -192,60 +201,60 @@ classdef OscillationAnalyzer<handle
             % - variance propagation through computed values?
             
             %run plateau detector on full processed trace, partition events into intervals
-            [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac);
-%             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac,'ThresholdPercentiles',app.thrPrct);
-            for i=1:app.nTraces
-                if ~isempty(Pts(i).tUp)
-                Pts(i).xUpR=interp1(app.t,app.Xraw(:,i),Pts(i).tUp);
-                Pts(i).xUpN=interp1(app.t,app.Xnorm(:,i),Pts(i).tUp);
-                end
-                if ~isempty(Pts(i).tDown)
-                Pts(i).xDownR=interp1(app.t,app.Xraw(:,i),Pts(i).tDown);
-                Pts(i).xDownN=interp1(app.t,app.Xnorm(:,i),Pts(i).tDown);
-                end
-            end
-            for interval=1:size(app.tIntervals,1)
-                
-                   
-                thisPts=Pts;
-                for i=1:app.nTraces
-                    ix=Pts(i).tUp>=app.tIntervals(interval,1)&Pts(i).tUp<=app.tIntervals(interval,2); %both have = to catch last point...
-                    thisPts(i).tUp=Pts(i).tUp(ix);
-                    thisPts(i).xUp=Pts(i).xUp(ix);
-                    thisPts(i).xUpR=Pts(i).xUpR(ix);
-                    thisPts(i).xUpN=Pts(i).xUpN(ix);
-                    
-                    ix=Pts(i).tDown>=app.tIntervals(interval,1)&Pts(i).tDown<=app.tIntervals(interval,2); %both have = to catch last point...
-                    thisPts(i).tDown=Pts(i).tDown(ix);
-                    thisPts(i).xDown=Pts(i).xDown(ix);
-                    thisPts(i).xDownR=Pts(i).xDownR(ix);
-                    thisPts(i).xDownN=Pts(i).xDownN(ix);
-                end
-                
-                app.trace{interval}.points=thisPts;
-                
-%                 app.trace{interval}.features=thisF;
-            end
+%             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac);
+% %             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac,'ThresholdPercentiles',app.thrPrct);
+%             for i=1:app.nTraces
+%                 if ~isempty(Pts(i).tUp)
+%                 Pts(i).xUpR=interp1(app.t,app.Xraw(:,i),Pts(i).tUp);
+%                 Pts(i).xUpN=interp1(app.t,app.Xnorm(:,i),Pts(i).tUp);
+%                 end
+%                 if ~isempty(Pts(i).tDown)
+%                 Pts(i).xDownR=interp1(app.t,app.Xraw(:,i),Pts(i).tDown);
+%                 Pts(i).xDownN=interp1(app.t,app.Xnorm(:,i),Pts(i).tDown);
+%                 end
+%             end
+%             for interval=1:size(app.tIntervals,1)
+%                 
+%                    
+%                 thisPts=Pts;
+%                 for i=1:app.nTraces
+%                     ix=Pts(i).tUp>=app.tIntervals(interval,1)&Pts(i).tUp<=app.tIntervals(interval,2); %both have = to catch last point...
+%                     thisPts(i).tUp=Pts(i).tUp(ix);
+%                     thisPts(i).xUp=Pts(i).xUp(ix);
+%                     thisPts(i).xUpR=Pts(i).xUpR(ix);
+%                     thisPts(i).xUpN=Pts(i).xUpN(ix);
+%                     
+%                     ix=Pts(i).tDown>=app.tIntervals(interval,1)&Pts(i).tDown<=app.tIntervals(interval,2); %both have = to catch last point...
+%                     thisPts(i).tDown=Pts(i).tDown(ix);
+%                     thisPts(i).xDown=Pts(i).xDown(ix);
+%                     thisPts(i).xDownR=Pts(i).xDownR(ix);
+%                     thisPts(i).xDownN=Pts(i).xDownN(ix);
+%                 end
+%                 
+%                 app.trace{interval}.points=thisPts;
+%                 
+% %                 app.trace{interval}.features=thisF;
+%             end
 
 %             %run plateau detector separately on each interval.
-%             for interval=1:size(app.tIntervals,1)
-%                 ix=app.t>=app.tIntervals(interval,1)&app.t<=app.tIntervals(interval,2); %both have = to catch last point...
-%                 [Pts,F]=plateau_detector(app.t(ix), app.Xfilt(ix,:), [0.4,0.3]);
-%                 
-%                 % interpolate the values of Xraw/Xnorm at feature detector times
-%                 for i=1:app.nTraces
-%                     if ~isempty(Pts(i).tUp)
-%                     Pts(i).xUpR=interp1(app.t(ix),app.Xraw(ix,i),Pts(i).tUp);
-%                     Pts(i).xUpN=interp1(app.t(ix),app.Xnorm(ix,i),Pts(i).tUp);
-%                     end
-%                     if ~isempty(Pts(i).tDown)
-%                     Pts(i).xDownR=interp1(app.t(ix),app.Xraw(ix,i),Pts(i).tDown);
-%                     Pts(i).xDownN=interp1(app.t(ix),app.Xnorm(ix,i),Pts(i).tDown);
-%                     end
-%                 end
-%                 app.trace{interval}.points=Pts;
-%                 app.trace{interval}.features=F;
-%             end
+            for interval=1:size(app.tIntervals,1)
+                ix=app.t>=app.tIntervals(interval,1)&app.t<=app.tIntervals(interval,2); %both have = to catch last point...
+                [Pts,F]=plateau_detector(app.t(ix), app.Xfilt(ix,:), [0.4,0.3]);
+                
+                % interpolate the values of Xraw/Xnorm at feature detector times
+                for i=1:app.nTraces
+                    if ~isempty(Pts(i).tUp)
+                    Pts(i).xUpR=interp1(app.t(ix),app.Xraw(ix,i),Pts(i).tUp);
+                    Pts(i).xUpN=interp1(app.t(ix),app.Xnorm(ix,i),Pts(i).tUp);
+                    end
+                    if ~isempty(Pts(i).tDown)
+                    Pts(i).xDownR=interp1(app.t(ix),app.Xraw(ix,i),Pts(i).tDown);
+                    Pts(i).xDownN=interp1(app.t(ix),app.Xnorm(ix,i),Pts(i).tDown);
+                    end
+                end
+                app.trace{interval}.points=Pts;
+                app.trace{interval}.features=F;
+            end
             
         end
     end
@@ -406,25 +415,26 @@ classdef OscillationAnalyzer<handle
             %allow header to contain parameters and metadata for the
             %experiment, eg. condition times, condition names, etc.
             
-            if exist('filename','var')&&~isempty(filename)
-                %try to load, if fails uigetfile
-            else
+            if ~exist('filename','var')||isempty(filename)|| ~exist(filename,'file')
                 [filename,path]=uigetfile({'*.xls*'});
                 filename=[path,filename];
             end
-            
-            %load data
+
             [data,header]=xlsread(filename);
             time=data(:,1);
             X=data(:,2:end);
-            
+
             %decode header info
-            
+            opts=[]; %placeholder
+
             %interpolate any missing data using neighboring time points
             rowIsNan=any(isnan(X),2);
+            timeIsNan=isnan(time);
+
             if any(rowIsNan)
-%                 flag=[flag,{'some rows have NaN'}];
+            %                 flag=[flag,{'some rows have NaN'}];
                 r=find(rowIsNan);
+
                 if r(1)==1
                     time=time(2:end,1);
                     X=X(2:end,:);
