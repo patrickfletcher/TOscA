@@ -1,10 +1,12 @@
-# TOscA
+# OscAr
 
-## A Timeseries Oscilation Analysis tool
+## An Oscilation Analyzer for timeseries data
 
-TOscA is a graphical interface for performing basic analysis of oscillatory timeseries in Matlab. 
+OscAr is a graphical interface for performing basic visualization and analysis of oscillatory timeseries in Matlab. 
 
 ## Usage
+
+The analysis subroutines can be used *via* the graphical interface, or in scripts.
 
 ## Installation
 
