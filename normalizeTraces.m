@@ -20,6 +20,9 @@ if ~exist('doPlot','var')
 end
 
 switch method
+    case {'none'}
+        XNorm=X;
+        
     case {'zscore'}
         XNorm=(X-mean(X,1))./std(X,[],1);
         
@@ -37,7 +40,7 @@ switch method
     case {'devmedian'}
         XNorm=(X-median(X,1))./median(X,1);
         
-    case {'devtrend'}
+    case {'devtrend','trend'}
         
         %no errorchecking for now..
         trendmethod=methodpar{1};

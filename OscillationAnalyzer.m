@@ -38,6 +38,9 @@ classdef OscillationAnalyzer<handle
     %GUI properties
     properties
         
+        datafilepath
+        datafilename
+        
         hFig
         hAxRaw
         hAxNorm
@@ -81,25 +84,24 @@ classdef OscillationAnalyzer<handle
                 if ~exist('tCond','var')
                     tCond=[];
                 end
+            
+                app.dt=mode(diff(app.t));
+                app.fs=1/app.dt;
+
+                %set up time intervals
+                %TODO: adjustable endpoints - omit first bit of each interval?
+                %TODO: use omitted data for smoothing, or just mirror for edge?
+    %             tOmit=0;
+                app.nOmit=round(app.tOmit/app.dt); 
+                tCond=[app.t(1),tCond(:)',app.t(end)];
+                for i=1:length(tCond)-1
+                    app.tIntervals(i,:)=[tCond(i),tCond(i+1)];
+                end
+
+                app.nTraces=size(app.Xraw,2);
             end
             
-            app.setParams();
-            
-            app.dt=mode(diff(app.t));
-            app.fs=1/app.dt;
-            
-            %set up time intervals
-            %TODO: adjustable endpoints - omit first bit of each interval?
-            %TODO: use omitted data for smoothing, or just mirror for edge?
-%             tOmit=0;
-            app.nOmit=round(app.tOmit/app.dt); 
-            tCond=[app.t(1),tCond(:)',app.t(end)];
-            for i=1:length(tCond)-1
-                app.tIntervals(i,:)=[tCond(i),tCond(i+1)];
-            end
-            
-            app.nTraces=size(app.Xraw,2);
-            
+%             app.setParams();
             app.buildGUI(); %set up display elements
             app.processData(); 
             app.plotData(); %populate the axes
@@ -114,6 +116,7 @@ classdef OscillationAnalyzer<handle
             % TEST:
             %bandpass whole trace, amp-normalize+feature detect in IOIs?
             
+            app.Xnorm=nan(size(app.Xraw));
             app.Xfilt=nan(size(app.Xraw));
             
             for i=1:size(app.tIntervals,1)
@@ -121,28 +124,43 @@ classdef OscillationAnalyzer<handle
 
 % ix=true(size(app.t));
 % 
+                T=app.t(ix);
                 XRAW=app.Xraw(ix,:);
                 
                 %normailze
-%                 XNORM=XRAW;
-                XNORM=XRAW./mean(XRAW,1);
-%                 XNORM=XRAW./median(XRAW,1);
+%                 method='none';
+                method='devmean';
+%                 method='devmedian';
+%                 method='zscore';
+%                 method='unit';
+                methodpar=[];
+
+%                 method='scale';
+%                 methodpar='mean';
+% %                 methodpar='median';
                 
+%                 method='trend';
+% %                 methodpar={'gaussian',app.Tlo};
+%                 methodpar={'lowpass',1/app.Tlo};                
+                XNORM=normalizeTraces(T,XRAW,method,methodpar);
+
                 %detrend
 %                 method='none';
 %                 methodpar=[];
-%                 method='lowpass'; %for better filter design options than moving average
-%                 methodpar=1/app.Tlo;%cutoff period for lowpass to create smoothed traces as trend
-                method='gaussian'; %for better filter design options than moving average
-                methodpar=app.Tlo;
-                [XDT,XT]=detrendTraces(app.t,XNORM,method,methodpar);
+%                 method='gaussian'; %for better filter design options than moving average
+%                 methodpar=app.Tlo;
+                method='lowpass'; %for better filter design options than moving average
+                methodpar=1/app.Tlo;%cutoff period for lowpass to create smoothed traces as trend
+                [XDT,XT]=detrendTraces(T,XNORM,method,methodpar);
                 
                 %filter
 %                 method='none';
 %                 methodpar=[];
-                method='gaussian'; %for better filter design options than moving average
-                methodpar=app.Thi;
-                XFILT=filterTraces(app.t,XDT,method,methodpar);
+%                 method='gaussian'; %for better filter design options than moving average
+%                 methodpar=app.Thi;
+                method='lowpass'; %for better filter design options than moving average
+                methodpar=1/app.Thi;
+                XFILT=filterTraces(T,XDT,method,methodpar);
                
                 
                 %final normalization useful for getting ap/sp/period
@@ -271,7 +289,7 @@ classdef OscillationAnalyzer<handle
         
         %set up all the graphical components of the UI
         function buildGUI(app)
-            app.hFig=figure('Name','Trace Analyzer','NumberTitle','off');
+            app.hFig=figure('Name',['Oscillation Analyzer - ',app.datafilename],'NumberTitle','off');
             app.hFig.KeyPressFcn=@app.keyPressDecoder;
             
             app.hAxRaw=subplot(3,1,1); 
@@ -281,33 +299,41 @@ classdef OscillationAnalyzer<handle
         end
         
         function plotData(app)
-            cla(app.hAxRaw);
+%             cla(app.hAxRaw);
             app.hLraw=plot(app.hAxRaw,app.t,app.Xraw,'color',app.lightgray,'LineWidth',app.bgLineWidth); 
-            cla(app.hAxNorm);
+%             cla(app.hAxNorm);
             app.hLnorm=plot(app.hAxNorm,app.t,app.Xnorm,'color',app.lightgray,'LineWidth',app.bgLineWidth);
-            cla(app.hAxFilt);
+%             cla(app.hAxFilt);
             app.hLfilt=plot(app.hAxFilt,app.t,app.Xfilt,'color',app.lightgray,'LineWidth',app.bgLineWidth); 
             
+            Tlim=[min(app.t),max(app.t)];
+            
             ylabel(app.hAxRaw,'Xraw')
-            axis(app.hAxRaw,'tight')
+%             axis(app.hAxRaw,'tight')
+            app.hAxRaw.XLim=Tlim;
+            app.hAxRaw.YLim=[min(app.Xraw(:)),max(app.Xraw(:))];
             
             ylabel(app.hAxNorm,'Xnorm,detrend')
-            axis(app.hAxNorm,'tight')
+%             axis(app.hAxNorm,'tight')
+            app.hAxNorm.XLim=Tlim;
+            app.hAxNorm.YLim=[min(app.Xnorm(:)),max(app.Xnorm(:))];
             
             xlabel(app.hAxFilt,'Time')
             ylabel(app.hAxFilt,'Xfilt')
-            axis(app.hAxFilt,'tight')
+%             axis(app.hAxFilt,'tight')
+            app.hAxFilt.XLim=Tlim;
+            app.hAxFilt.YLim=[min(app.Xfilt(:)),max(app.Xfilt(:))];
             
             linkaxes([app.hAxRaw,app.hAxNorm,app.hAxFilt],'x')
             
-            hold(app.hAxRaw,'on')
-            hold(app.hAxNorm,'on')
-            hold(app.hAxFilt,'on')
             
             app.updateCurrentTrace();
         end
         
         function updateCurrentTrace(app)
+            
+            title(app.hAxRaw,['ROI ', num2str(app.tix)]);
+            
             %raw traces
             app.hLraw(app.oldix).Color=app.lightgray;
             app.hLraw(app.oldix).LineWidth=app.bgLineWidth;
@@ -337,6 +363,9 @@ classdef OscillationAnalyzer<handle
             
             delete(findobj(app.hFig,'Tag','spMarks'))
             
+            hold(app.hAxRaw,'on')
+            hold(app.hAxNorm,'on')
+            hold(app.hAxFilt,'on')
             for interval=1:size(app.tIntervals,1)
                 Pts=app.trace{interval}.points(app.tix);
                 
@@ -358,9 +387,9 @@ classdef OscillationAnalyzer<handle
                 end
 
             end
-            
-%             ylim(app.hAxNorm,app.filtRange(:,app.tix));
-%             ylim(app.hAxFilt,prctile(app.Xfilt(:,app.tix),app.thrPrct));
+            hold(app.hAxRaw,'off')
+            hold(app.hAxNorm,'off')
+            hold(app.hAxFilt,'off')
             
         end
         
@@ -393,6 +422,8 @@ classdef OscillationAnalyzer<handle
                     
                 case {'l'}
                     app.loadData();
+                    app.processData();
+                    app.plotData();
                     
                 case {'s'}
                     disp('save placeholder')
@@ -420,6 +451,8 @@ classdef OscillationAnalyzer<handle
                 filename=[path,filename];
             end
 
+            [app.datafilepath,app.datafilename]=fileparts(filename);
+            
             [data,header]=xlsread(filename);
             time=data(:,1);
             X=data(:,2:end);
@@ -453,6 +486,26 @@ classdef OscillationAnalyzer<handle
             
             app.t=time;
             app.Xraw=X;
+            
+                
+            if ~exist('tCond','var')
+                tCond=[];
+            end
+
+            app.dt=mode(diff(app.t));
+            app.fs=1/app.dt;
+%             tOmit=0;
+            app.nOmit=round(app.tOmit/app.dt); 
+            tCond=[app.t(1),tCond(:)',app.t(end)];
+            for i=1:length(tCond)-1
+                app.tIntervals(i,:)=[tCond(i),tCond(i+1)];
+            end
+            
+            app.nTraces=size(X,2);
+            app.oldix=1;
+            app.tix=1;
+            
+            app.hFig.Name=['Oscillation Analyzer - ',app.datafilename];
         end
         
         %save results/params: MAT + XLS? ask for save name
