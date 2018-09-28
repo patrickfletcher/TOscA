@@ -7,6 +7,9 @@ if ~exist('doPlot','var')
     doPlot=0;
 end
 
+steepness=0.5;
+stopAtten=90;
+
 switch lower(method)
     case {'none'}
         XFilt=X;
@@ -20,8 +23,8 @@ switch lower(method)
             fpass=methodparam;
         end
         
-        XFilt=lowpass(X,fpass,fs,'ImpulseResponse','iir');
-%         XFilt=lowpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
+%         XFilt=lowpass(X,fpass,fs,'ImpulseResponse','iir');
+        XFilt=lowpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
     
     case {'movmean','movmedian','gaussian','lowess','loess','rlowess','rloess','sgolay'}
         
@@ -45,8 +48,8 @@ switch lower(method)
             fpass=methodparam;
         end
         
-        XFilt=bandpass(X,fpass,fs,'ImpulseResponse','iir');
-%         XFilt=bandpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
+%         XFilt=bandpass(X,fpass,fs,'ImpulseResponse','iir');
+        XFilt=bandpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
 end
 
 

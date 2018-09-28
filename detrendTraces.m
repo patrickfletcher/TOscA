@@ -9,6 +9,9 @@ if ~exist('doPlot','var')
     doPlot=0;
 end
 
+steepness=0.5;
+stopAtten=90;
+
 XTrend=zeros(size(X));
 switch lower(method)
     case {'none'}
@@ -36,8 +39,20 @@ switch lower(method)
             fpass=methodparam;
         end
         
-        XTrend=lowpass(X,fpass,fs,'ImpulseResponse','iir');
-%         XTrend=lowpass(X,params.trend.fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
+%         XTrend=lowpass(X,fpass,fs,'ImpulseResponse','iir');
+        XTrend=lowpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
+    
+    case {'highpass'}
+        
+        %methodparam=highpass cutoff frequency
+        if ~exist('methodparam','var')||isempty(methodparam)
+            error('highpass trend removal requires a cutoff frequency');
+        else
+            fpass=methodparam;
+        end
+        
+        Xdetrend=highpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
+        XTrend=X-Xdetrend;
 
     case {'movmean','movmedian','gaussian','lowess','loess','rlowess','rloess','sgolay'}
         
