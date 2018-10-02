@@ -1,4 +1,4 @@
-function [XNORM, XDT, XFILT, XT]=preprocess(t,X,params,doPlot)
+function [XNORM, XDT, XFILT, tfilt,XT]=preprocess(t,X,params,doPlot)
 % convenience function with plotting to show whole pipeline
 
 if ~exist('doPlot','var')
@@ -7,9 +7,13 @@ end
 
 XNORM=normalizeTraces(t,X,params.norm.method,params.norm.methodpar);
         
+
 [XDT,XT]=detrendTraces(t,XNORM,params.trend.method,params.trend.methodpar);
 
-XFILT=filterTraces(t,XDT,params.filt.method,params.filt.methodpar);
+% if ~isfield(params.filt,'doTrim')
+%     params.filt.doTrim=0;
+% end
+[XFILT,tfilt]=filterTraces(t,XDT,params.filt.method,params.filt.methodpar);
 
 %plot to show result
 if nargout==0 || doPlot==1

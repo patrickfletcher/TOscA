@@ -44,7 +44,7 @@ end
 
 isUp=X(1,:)>thrUp;
 
-DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
+% DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
 
 trace(nX)=struct('tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
                  'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
@@ -155,17 +155,17 @@ for i=1:nX
         trace(i).tMin(j)=t(tt(imin));
         trace(i).xMin(j)=xmin;
         
-        [dxmax,idxmax]=max(DX(tt,i));
-        trace(i).iDXMax(j)=idxmax;
-        trace(i).tDXMax(j)=t(tt(idxmax));
-        trace(i).xDXMax(j)=X(tt(idxmax),i);
-        trace(i).dxMax(j)=dxmax;
-        
-        [dxmin,idxmin]=min(DX(tt,i));
-        trace(i).iDXMin(j)=idxmin;
-        trace(i).tDXMin(j)=t(tt(idxmin));
-        trace(i).xDXMin(j)=X(tt(idxmin),i);
-        trace(i).dxMin(j)=dxmin;
+%         [dxmax,idxmax]=max(DX(tt,i));
+%         trace(i).iDXMax(j)=idxmax;
+%         trace(i).tDXMax(j)=t(tt(idxmax));
+%         trace(i).xDXMax(j)=X(tt(idxmax),i);
+%         trace(i).dxMax(j)=dxmax;
+%         
+%         [dxmin,idxmin]=min(DX(tt,i));
+%         trace(i).iDXMin(j)=idxmin;
+%         trace(i).tDXMin(j)=t(tt(idxmin));
+%         trace(i).xDXMin(j)=X(tt(idxmin),i);
+%         trace(i).dxMin(j)=dxmin;
         
         features(i).amp(j)=xmax-xmin;
     end
@@ -222,7 +222,7 @@ end
 function [thrPtiles,fracUp,fracDown,doInterp,doPlot]=parseArgs(t, X, varargin)
 
     %default parameters
-    defaultF=0.5; %near halfmax
+    defaultF=[0.5,0.4]; %near halfmax
     thrPtiles=[0,100];
     doInterp=true;
     doPlot=false;

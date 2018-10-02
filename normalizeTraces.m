@@ -37,8 +37,14 @@ switch method
     case {'devmean'}
         XNorm=(X-mean(X,1))./mean(X,1);
         
+    case {'devmeanpow'}
+        XNorm=(X-mean(X,1))./mean(X,1).^methodpar;
+        
     case {'devmedian'}
         XNorm=(X-median(X,1))./median(X,1);
+        
+    case {'devmedianpow'}
+        XNorm=(X-median(X,1))./median(X,1).^methodpar;
         
     case {'devtrend','trend'}
         
@@ -48,6 +54,15 @@ switch method
         
         [~,XTrend]=detrendTraces(t,X,trendmethod,trendpar);
         XNorm=(X-XTrend)./XTrend;
+        
+    case {'devtrend2','trend2'}
+        
+        %no errorchecking for now..
+        trendmethod=methodpar{1};
+        trendpar=methodpar{2};
+        
+        [~,XTrend]=detrendTraces(t,X,trendmethod,trendpar);
+        XNorm=(X-XTrend)./XTrend.^2;
         
     case {'center'}
         switch methodpar

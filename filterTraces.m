@@ -1,8 +1,11 @@
-function XFilt=filterTraces(t,X,method,methodparam,doPlot)
+function [XFilt,tfilt]=filterTraces(t,X,method,methodparam,doTrim,doPlot)
 
 dt=mode(diff(t));
 fs=1/dt; 
 
+if ~exist('doTrim','var')
+    doTrim=0;
+end
 if ~exist('doPlot','var')
     doPlot=0;
 end
@@ -10,6 +13,7 @@ end
 steepness=0.5;
 stopAtten=90;
 
+tfilt=t;
 switch lower(method)
     case {'none'}
         XFilt=X;
@@ -52,6 +56,11 @@ switch lower(method)
         XFilt=bandpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
 end
 
+if doTrim
+    wsz2=ceil(wsz/2);
+    tfilt=tfilt(wsz2:end-wsz2+1);
+    XFilt=XFilt(wsz2:end-wsz2+1,:);
+end
 
 
 %plot to show result
@@ -67,24 +76,10 @@ end
 
 %nested functions can see variables in caller's scope
     function plotData()
-%         subplot(2,1,1)
-%         plot(t,X(:,tix),t,XFilt(:,tix))
-%         grid on
-%         xlabel('Time')
-% %         ylabel('raw')
-%         axis tight
-%         
-%         subplot(2,1,2)
-%         plot(t,XFilt(:,tix))
-%         grid on
-%         xlabel('Time')
-%         ylabel('filtered')
-%         axis tight
-        
         
         plot(t,X(:,tix))
         hold on
-        plot(t,XFilt(:,tix),'linewidth',1.5)
+        plot(tfilt,XFilt(:,tix),'linewidth',1.5)
         hold off
         grid on
         xlabel('Time')
