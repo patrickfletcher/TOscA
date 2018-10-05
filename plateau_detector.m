@@ -26,7 +26,7 @@ function [trace,features]=plateau_detector(t, X, varargin)
 %  trace - struct containing special points, for plotting
 
 %check inputs and parse optional parameters
-[thrPtiles,fracUp,fracDown,doInterp,doPlot,figID]=parseArgs(t, X, varargin{:});
+[thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
 
@@ -181,7 +181,6 @@ end
 %     features(nX).T=[];
 % end
 
-
 %plot to show performance
 if nargout==0||doPlot==1
     tix=1;
@@ -190,7 +189,9 @@ if nargout==0||doPlot==1
     else
         figID=figure(figID);
     end
-    figID.KeyPressFcn=@keypressFcn;
+    if dokeypress
+        figID.KeyPressFcn=@keypressFcn;
+    end
     
     plotData()
 end
@@ -234,13 +235,14 @@ end
 
 end
 
-function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID]=parseArgs(t, X, varargin)
+function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
 
     %default parameters
     defaultF=[0.5,0.4]; %near halfmax
     thrPtiles=[0,100];
     doInterp=true;
     doPlot=false;
+    doKeypress=false;
     figID=[];
     
     p=inputParser;
@@ -252,7 +254,8 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID]=parseArgs(t, X, varar
     addParameter(p,'ThresholdPercentiles',thrPtiles,@(x) isreal(x) && numel(x)==2);
     addParameter(p,'Interpolate',doInterp,validSwitch);
     addParameter(p,'Plot',doPlot,validSwitch);
-    addParameter(p,'FigureID',figID,validSwitch);
+    addParameter(p,'Keypress',doKeypress,validSwitch);
+    addParameter(p,'FigureID',figID);
     
     parse(p,t,X,varargin{:});
     
@@ -261,6 +264,7 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID]=parseArgs(t, X, varar
     doInterp=p.Results.Interpolate;
     doPlot=p.Results.Plot;
     figID=p.Results.FigureID;
+    dokeypress=p.Results.Keypress;
     
     if isscalar(f)
         fracUp=f;
