@@ -26,7 +26,7 @@ function [trace,features]=plateau_detector(t, X, varargin)
 %  trace - struct containing special points, for plotting
 
 %check inputs and parse optional parameters
-[thrPtiles,fracUp,fracDown,doInterp,doPlot]=parseArgs(t, X, varargin{:});
+[thrPtiles,fracUp,fracDown,doInterp,doPlot,figID]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
 
@@ -51,6 +51,10 @@ trace(nX)=struct('tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
                  'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
                  'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
 for i=2:length(t)
+    
+    %if strated up, then went below thrUp but not below thrDown, set isUp=0
+    firstDown=isUp & X(i,:)<thrUp & arrayfun(@(x)isempty(x.iUp),trace);
+    isUp(firstDown)=0;
     
     %check for downward-transition and upward-transition
     isDownTransition=isUp&X(i,:)<thrDown;
@@ -122,7 +126,7 @@ numUp=arrayfun(@(x) length(x.tUp),trace);
 
 % append trace dependent info?
 
-% features
+features=struct('T',[],'APD',[],'PF',[],'amp',[]);
 for i=1:nX
     
     if numel(trace(i).tUp)>1
@@ -172,30 +176,41 @@ for i=1:nX
     
     end
 end
-% features=[];
+
+% if length(features)~=nX
+%     features(nX).T=[];
+% end
 
 
 %plot to show performance
 if nargout==0||doPlot==1
     tix=1;
-    figure('KeyPressFcn',@keypressFcn);
+    if isempty(figID)
+        figID=gcf; %new figure if none available, otherwise current fig
+    else
+        figID=figure(figID);
+    end
+    figID.KeyPressFcn=@keypressFcn;
+    
     plotData()
 end
 
 %nested functions can see variables in caller's scope
     function plotData()
-        clf
-        plot(t,X(:,tix),'k-')
+%         clf
+        delete(findobj(gca,'Tag','plateau_detector'));
+
+        plot(t,X(:,tix),'k-','Tag','plateau_detector')
         hold on
-        plot(trace(tix).tUp,trace(tix).xUp,'bs')
-        plot(trace(tix).tDown,trace(tix).xDown,'bo')
-        plot(trace(tix).tMax,trace(tix).xMax,'rv')
-        plot(trace(tix).tMin,trace(tix).xMin,'r^')
-%         plot(trace(tix).tDXMax,trace(tix).xDXMax,'g>')
-%         plot(trace(tix).tDXMin,trace(tix).xDXMin,'g<')
-        plot(xlim(),thrUp(tix)*[1,1],'r--')
+        plot(trace(tix).tUp,trace(tix).xUp,'bs','Tag','plateau_detector')
+        plot(trace(tix).tDown,trace(tix).xDown,'bo','Tag','plateau_detector')
+        plot(trace(tix).tMax,trace(tix).xMax,'rv','Tag','plateau_detector')
+        plot(trace(tix).tMin,trace(tix).xMin,'r^','Tag','plateau_detector')
+%         plot(trace(tix).tDXMax,trace(tix).xDXMax,'g>','Tag','plateau_detector')
+%         plot(trace(tix).tDXMin,trace(tix).xDXMin,'g<','Tag','plateau_detector')
+        plot(xlim(),thrUp(tix)*[1,1],'r--','Tag','plateau_detector')
         if thrUp~=thrDown
-            plot(xlim(),thrDown(tix)*[1,1],'b--')
+            plot(xlim(),thrDown(tix)*[1,1],'b--','Tag','plateau_detector')
         end
         xlabel('t')
         ylabel('x')
@@ -219,13 +234,14 @@ end
 
 end
 
-function [thrPtiles,fracUp,fracDown,doInterp,doPlot]=parseArgs(t, X, varargin)
+function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID]=parseArgs(t, X, varargin)
 
     %default parameters
     defaultF=[0.5,0.4]; %near halfmax
     thrPtiles=[0,100];
     doInterp=true;
     doPlot=false;
+    figID=[];
     
     p=inputParser;
     validX=@(x) isreal(x) && size(x,1)==length(t); %traces are columns of X
@@ -236,6 +252,7 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot]=parseArgs(t, X, varargin)
     addParameter(p,'ThresholdPercentiles',thrPtiles,@(x) isreal(x) && numel(x)==2);
     addParameter(p,'Interpolate',doInterp,validSwitch);
     addParameter(p,'Plot',doPlot,validSwitch);
+    addParameter(p,'FigureID',figID,validSwitch);
     
     parse(p,t,X,varargin{:});
     
@@ -243,6 +260,7 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot]=parseArgs(t, X, varargin)
     thrPtiles=p.Results.ThresholdPercentiles;
     doInterp=p.Results.Interpolate;
     doPlot=p.Results.Plot;
+    figID=p.Results.FigureID;
     
     if isscalar(f)
         fracUp=f;
