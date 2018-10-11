@@ -146,7 +146,8 @@ for i=1:nX
     nT=length(trace(i).tUp)-1;
     features(i).T=diff(trace(i).tUp);
     features(i).APD=trace(i).tDown-trace(i).tUp(1:end-1); %active phase duration
-    features(i).PF=features(i).APD/features(i).T;
+    features(i).PF=features(i).APD./features(i).T;
+    
     for j=1:nT
         tt=trace(i).iUp(j):trace(i).iUp(j+1)-1;
         [xmax,imax]=max(X(tt,i));
@@ -170,11 +171,10 @@ for i=1:nX
 %         trace(i).tDXMin(j)=t(tt(idxmin));
 %         trace(i).xDXMin(j)=X(tt(idxmin),i);
 %         trace(i).dxMin(j)=dxmin;
-        
-        features(i).amp(j)=xmax-xmin;
     end
     
     end
+    features(i).amp=trace(i).xMax-trace(i).xMin;
 end
 
 % if length(features)~=nX

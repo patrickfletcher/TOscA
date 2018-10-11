@@ -1,11 +1,11 @@
-function [XFilt,tfilt]=filterTraces(t,X,method,methodparam,doTrim,doPlot)
+function [XFilt,tfilt]=filterTraces(t,X,method,methodparam,doPlot)
 
 dt=mode(diff(t));
 fs=1/dt; 
 
-if ~exist('doTrim','var')
-    doTrim=0;
-end
+% if ~exist('doTrim','var')
+%     doTrim=0;
+% end
 if ~exist('doPlot','var')
     doPlot=0;
 end
@@ -56,11 +56,11 @@ switch lower(method)
         XFilt=bandpass(X,fpass,fs,'ImpulseResponse','iir','Steepness',steepness,'StopbandAttenuation',stopAtten);
 end
 
-if doTrim
-    wsz2=ceil(wsz/2);
-    tfilt=tfilt(wsz2:end-wsz2+1);
-    XFilt=XFilt(wsz2:end-wsz2+1,:);
-end
+% if doTrim
+%     wsz2=ceil(wsz/2);
+%     tfilt=tfilt(wsz2:end-wsz2+1);
+%     XFilt=XFilt(wsz2:end-wsz2+1,:);
+% end
 
 
 %plot to show result
@@ -68,7 +68,7 @@ if nargout==0 || doPlot==1
     
 nX=size(X,2);
 tix=1;
-figure('KeyPressFcn',@keypressFcn);
+figure('Name','Filter Traces','KeyPressFcn',@keypressFcn);
 plotData()
     
 end

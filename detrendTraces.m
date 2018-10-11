@@ -76,7 +76,7 @@ if nargout==0 || doPlot==1
     
 nX=size(X,2);
 tix=1;
-figure('KeyPressFcn',@keypressFcn);
+figure('Name','Detrend Traces','KeyPressFcn',@keypressFcn);
 plotData()
     
 end

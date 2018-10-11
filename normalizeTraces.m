@@ -37,6 +37,9 @@ switch method
     case {'devmean'}
         XNorm=(X-mean(X,1))./mean(X,1);
         
+    case {'devmean2'}
+        XNorm=(X-mean(X,1))./mean(X,1).^2;
+        
     case {'devmeanpow'}
         XNorm=(X-mean(X,1))./mean(X,1).^methodpar;
         
@@ -118,7 +121,11 @@ switch method
                 end 
                 XNorm=X/k;
         end
-end
+        
+    otherwise
+        error(['unknown method: ' method]);
+    end
+
 
 
 
@@ -127,7 +134,7 @@ if nargout==0 || doPlot==1
     
 nX=size(X,2);
 tix=1;
-figure('KeyPressFcn',@keypressFcn);
+figure('name','Normalize Traces','KeyPressFcn',@keypressFcn);
 plotData()
     
 end
