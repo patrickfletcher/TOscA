@@ -17,6 +17,7 @@ classdef OscillationAnalyzer<handle
         condTimes
         condNames
         tIntervals
+        nIntervals
         tOmit=0
         nOmit=0
         
@@ -61,7 +62,7 @@ classdef OscillationAnalyzer<handle
     
     %constructor
     methods
-        function app=OscillationAnalyzer(data,tCond)
+        function app=OscillationAnalyzer(data,condTimes,condNames)
             %assume data is either filename, or data matrix [t,X], columns
             %are observations.
             
@@ -71,7 +72,7 @@ classdef OscillationAnalyzer<handle
             %if no inputs, request file. must be able to map at least to t, Xraw
             if nargin==0
                 app.loadData();
-                tCond=[]; %need to be able to set this
+                condTimes=[]; %need to be able to set this
             else
                 if isnumeric(data)
                     app.t=data(:,1);
@@ -81,8 +82,8 @@ classdef OscillationAnalyzer<handle
                     app.loadData(filename);
                 end
                 
-                if ~exist('tCond','var')
-                    tCond=[];
+                if ~exist('condTimes','var')
+                    condTimes=[];
                 end
             
                 app.dt=mode(diff(app.t));
@@ -93,11 +94,14 @@ classdef OscillationAnalyzer<handle
                 %TODO: use omitted data for smoothing, or just mirror for edge?
     %             tOmit=0;
                 app.nOmit=round(app.tOmit/app.dt); 
-                tCond=[app.t(1),tCond(:)',app.t(end)];
-                for i=1:length(tCond)-1
-                    app.tIntervals(i,:)=[tCond(i),tCond(i+1)];
+                condTimes=unique([app.t(1),condTimes(:)',app.t(end)]);
+                app.nIntervals=length(condTimes)-1;
+                for i=1:app.nIntervals
+                    app.tIntervals(i,:)=[condTimes(i),condTimes(i+1)];
                 end
-
+                app.condTimes=condTimes(1:end-1);
+                app.condNames=condNames;
+                
                 app.nTraces=size(app.Xraw,2);
             end
             
@@ -299,11 +303,9 @@ classdef OscillationAnalyzer<handle
         end
         
         function plotData(app)
-%             cla(app.hAxRaw);
-            app.hLraw=plot(app.hAxRaw,app.t,app.Xraw,'color',app.lightgray,'LineWidth',app.bgLineWidth); 
-%             cla(app.hAxNorm);
+            
+            app.hLraw=plot(app.hAxRaw,app.t,app.Xraw,'color',app.lightgray,'LineWidth',app.bgLineWidth);
             app.hLnorm=plot(app.hAxNorm,app.t,app.Xnorm,'color',app.lightgray,'LineWidth',app.bgLineWidth);
-%             cla(app.hAxFilt);
             app.hLfilt=plot(app.hAxFilt,app.t,app.Xfilt,'color',app.lightgray,'LineWidth',app.bgLineWidth); 
             
             Tlim=[min(app.t),max(app.t)];
@@ -323,6 +325,13 @@ classdef OscillationAnalyzer<handle
 %             axis(app.hAxFilt,'tight')
             app.hAxFilt.XLim=Tlim;
             app.hAxFilt.YLim=[min(app.Xfilt(:)),max(app.Xfilt(:))];
+            
+            for i=1:app.nIntervals-1
+                line(app.hAxRaw,app.tIntervals(i,2)*[1,1],app.hAxRaw.YLim,'color',[0,0.75,0]);
+                line(app.hAxNorm,app.tIntervals(i,2)*[1,1],app.hAxNorm.YLim,'color',[0,0.75,0]);
+                line(app.hAxFilt,app.tIntervals(i,2)*[1,1],app.hAxFilt.YLim,'color',[0,0.75,0]);
+            end
+            
             
             linkaxes([app.hAxRaw,app.hAxNorm,app.hAxFilt],'x')
             

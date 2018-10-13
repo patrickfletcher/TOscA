@@ -75,8 +75,8 @@ classdef Experiment < handle
             header={};
             if loadFile
                 if isempty(fullfile) || ~exist(fullfile,'file')
-                    [path,filename,ext]=uigetfile({'*.xls*'});
-                    fullfile=[path,filesep,filename,ext];
+                    [filename,path]=uigetfile({'*.xls*'});
+                    fullfile=[path,filename];
                 end
                 
                 [data,header]=xlsread(fullfile);
