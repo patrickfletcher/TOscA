@@ -10,6 +10,9 @@ function XNorm=normalizeTraces(t,X,method,methodpar,doPlot)
 %     'range'  - normalizes by rescaling the range of the data to the 
 %                interval [0,1].
 
+% TODO: no inputs - return cell array of possible methods with their possible params
+%  {{method},{methodpar}}
+
 if ~exist('method','var')
     method='zscore';
     methodpar=[];
@@ -33,6 +36,11 @@ switch method
             XNorm=intrvl(1)+diff(intrvl)*XNorm;
         end
         
+    case {'ptile'} %methodpar=lo/hi ptile
+        p=prctile(X,methodpar,1);
+        XNorm=(X-p(1,:))./abs(p(2,:)-p(1,:));
+        XNorm(XNorm<0)=0;
+        XNorm(XNorm>1)=1;
         
     case {'devmean'}
         XNorm=(X-mean(X,1))./mean(X,1);

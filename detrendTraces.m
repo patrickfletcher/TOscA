@@ -1,5 +1,8 @@
 function [Xdetrend,XTrend]=detrendTraces(t,X,method,methodparam,doPlot)
 
+% TODO: no inputs - return cell array of possible methods with their possible params
+%  {{method},{methodpar}}
+
 nX=size(X,2);
 
 dt=mode(diff(t));

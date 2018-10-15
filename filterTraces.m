@@ -1,5 +1,8 @@
 function [XFilt,tfilt]=filterTraces(t,X,method,methodparam,doPlot)
 
+% TODO: no inputs - return cell array of possible methods with their possible params
+%  {{method},{methodpar}}
+
 dt=mode(diff(t));
 fs=1/dt; 
 
@@ -40,6 +43,7 @@ switch lower(method)
         end
         
         wsz=round(wwidth/dt);
+        wsz=max(wsz,1);
         XFilt=smoothdata(X,method,wsz);
         
     case {'bandpass'}

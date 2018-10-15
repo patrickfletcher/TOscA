@@ -1,6 +1,6 @@
 classdef OscillationAnalyzer<handle
     %OscillationAnalyzer is a graphical interface for performing
-    %processing and feature extraction on timeseries data. 
+    %processing and feature extraction on timeseries data.
     
     %TOscA - Timeseries Oscillation Analysis tool
     
@@ -24,16 +24,17 @@ classdef OscillationAnalyzer<handle
         Xraw
         Xnorm
         Xtrend
+        Xdetrend
         Xfilt
+        XfiltUnit
         nTraces
         
         thrPrct=[0,100]
-        thrFrac=[0.5,0.4]
+        thrFrac=[0.5,0.45]
         Thi=1
         Tlo=20
         
         trace
-        F
     end
     
     %GUI properties
@@ -85,15 +86,18 @@ classdef OscillationAnalyzer<handle
                 if ~exist('condTimes','var')
                     condTimes=[];
                 end
-            
+                if ~exist('condNames','var')
+                    condNames={''};
+                end
+                
                 app.dt=mode(diff(app.t));
                 app.fs=1/app.dt;
-
+                
                 %set up time intervals
                 %TODO: adjustable endpoints - omit first bit of each interval?
                 %TODO: use omitted data for smoothing, or just mirror for edge?
-    %             tOmit=0;
-                app.nOmit=round(app.tOmit/app.dt); 
+                %             tOmit=0;
+                app.nOmit=round(app.tOmit/app.dt);
                 condTimes=unique([app.t(1),condTimes(:)',app.t(end)]);
                 app.nIntervals=length(condTimes)-1;
                 for i=1:app.nIntervals
@@ -105,9 +109,9 @@ classdef OscillationAnalyzer<handle
                 app.nTraces=size(app.Xraw,2);
             end
             
-%             app.setParams();
+            %             app.setParams();
             app.buildGUI(); %set up display elements
-            app.processData(); 
+            app.processData();
             app.plotData(); %populate the axes
         end
     end
@@ -123,81 +127,80 @@ classdef OscillationAnalyzer<handle
             app.Xnorm=nan(size(app.Xraw));
             app.Xfilt=nan(size(app.Xraw));
             
-            for i=1:size(app.tIntervals,1)
-                ix=app.t>=app.tIntervals(i,1)&app.t<=app.tIntervals(i,2); %both have = to catch last point...
-
-% ix=true(size(app.t));
+            %             for i=1:size(app.tIntervals,1)
+            %                 ix=app.t>=app.tIntervals(i,1)&app.t<=app.tIntervals(i,2); %both have = to catch last point...
+            
+            ix=true(size(app.t));
+            %
+            T=app.t(ix);
+            XRAW=app.Xraw(ix,:);
+            
+            %normailze
+%                             method='none';
+%             method='devmean';
+            method='devmean2';
+            %                 method='devmedian';
+            %                 method='zscore';
+            %                 method='unit';
+            methodpar=[];
+            
+            %                 method='scale';
+            %                 methodpar='mean';
+            % %                 methodpar='median';
+            
+            %                 method='trend';
+            % %                 methodpar={'gaussian',app.Tlo};
+            %                 methodpar={'lowpass',1/app.Tlo};
+            XNORM=normalizeTraces(T,XRAW,method,methodpar);
+            
+            %detrend
+%                             method='none';
+%                             methodpar=[];
+            %                 method='gaussian';
+            method='sgolay';
+            methodpar=app.Tlo;
+            %                 method='lowpass';
+            %                 methodpar=1/app.Tlo;%cutoff period for lowpass to create smoothed traces as trend
+            [XDT,XT]=detrendTraces(T,XNORM,method,methodpar);
+            
+            %filter
+            %                 method='none';
+            %                 methodpar=[];
+                            method='gaussian'; %for better filter design options than moving average
+                            methodpar=app.Thi;
+%             method='lowpass'; %for better filter design options than moving average
+%             methodpar=1/app.Thi;
+            XFILT=filterTraces(T,XDT,method,methodpar);
+            
+            
+            %final normalization per interval, useful for threshold detect
+%             for i=1:size(app.tIntervals,1)
+%                 ix=app.t>=app.tIntervals(i,1)&app.t<=app.tIntervals(i,2); %both have = to catch last point...
+% %                 XFILT(ix,:)=normalizeTraces(T(ix),XFILT(ix,:),'unit',[]);
+%                 XFILT(ix,:)=normalizeTraces(T(ix),XFILT(ix,:),'ptile',[5,95]);
 % 
-                T=app.t(ix);
-                XRAW=app.Xraw(ix,:);
-                
-                %normailze
-%                 method='none';
-                method='devmean';
-%                 method='devmedian';
-%                 method='zscore';
-%                 method='unit';
-                methodpar=[];
-
-%                 method='scale';
-%                 methodpar='mean';
-% %                 methodpar='median';
-                
-%                 method='trend';
-% %                 methodpar={'gaussian',app.Tlo};
-%                 methodpar={'lowpass',1/app.Tlo};                
-                XNORM=normalizeTraces(T,XRAW,method,methodpar);
-
-                %detrend
-%                 method='none';
-%                 methodpar=[];
-%                 method='gaussian'; %for better filter design options than moving average
-%                 methodpar=app.Tlo;
-                method='lowpass'; %for better filter design options than moving average
-                methodpar=1/app.Tlo;%cutoff period for lowpass to create smoothed traces as trend
-                [XDT,XT]=detrendTraces(T,XNORM,method,methodpar);
-                
-                %filter
-%                 method='none';
-%                 methodpar=[];
-%                 method='gaussian'; %for better filter design options than moving average
-%                 methodpar=app.Thi;
-                method='lowpass'; %for better filter design options than moving average
-                methodpar=1/app.Thi;
-                XFILT=filterTraces(T,XDT,method,methodpar);
-               
-                
-                %final normalization useful for getting ap/sp/period
-%                 XFILT=(XFILT-mean(XFILT,1));
-
-%                 XFILT=(XFILT-median(XFILT,1));
-                
-%                 p=prctile(XFILT,[25,75],1);
-%                 p=prctile(XFILT,[5,95],1);
-%                 p=prctile(XFILT,[2.5,97.5],1);
-%                 p=prctile(XFILT,[0,100],1);
-                p=prctile(XFILT(1+app.nOmit:end,:),[0,100],1);
-%                 p=prctile(XFILT,app.thrPrct,1);
-                XFILT=(XFILT-p(1,:))./abs(p(2,:)-p(1,:));
-                XFILT(XFILT<0)=0;
-                XFILT(XFILT>1)=1;
-                app.filtRange=p;
-                
-                %envelope detection and amplitude normalization
-%                 wszTrend=20;
-%                 wszTrend=round(wszTrend/app.dt);
-%                 wszTrend=max(wszTrend,3);
-%                 [envMax,envMin]=envelope(XFILT,wszTrend,'rms');
-%                 XFILT=(XFILT-envMin)./abs(envMax-envMin);
-%                 
-                
-                app.Xnorm(ix,:)=XDT;
-                app.Xfilt(ix,:)=XFILT;
-                
-                [P,f,Pmax,fmax]=powerSpectrum(XFILT-mean(XFILT,1),app.fs);
-                app.trace{i}.Tpsd=1./fmax;
-                app.trace{i}.Ppsd=Pmax;
-            end
+%             end
+            
+            %envelope detection and amplitude normalization
+            %                 wszTrend=20;
+            %                 wszTrend=round(wszTrend/app.dt);
+            %                 wszTrend=max(wszTrend,3);
+            %                 [envMax,envMin]=envelope(XFILT,wszTrend,'rms');
+            %                 XFILT=(XFILT-envMin)./abs(envMax-envMin);
+            %
+            
+            %                 app.Xnorm(ix,:)=XDT;
+            %                 app.Xfilt(ix,:)=XFILT;
+            %
+            %                 [P,f,Pmax,fmax]=powerSpectrum(XFILT-mean(XFILT,1),app.fs);
+            %                 app.trace{i}.features.Tpsd=1./fmax;
+            %                 app.trace{i}.features.Ppsd=Pmax;
+            %             end
+            
+            app.Xnorm=XNORM;
+            app.Xtrend=XT;
+            app.Xdetrend=XDT;
+            app.Xfilt=XFILT;
             
             app.getFeatures();
             
@@ -223,55 +226,82 @@ classdef OscillationAnalyzer<handle
             % - variance propagation through computed values?
             
             %run plateau detector on full processed trace, partition events into intervals
-%             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac);
-% %             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac,'ThresholdPercentiles',app.thrPrct);
-%             for i=1:app.nTraces
-%                 if ~isempty(Pts(i).tUp)
-%                 Pts(i).xUpR=interp1(app.t,app.Xraw(:,i),Pts(i).tUp);
-%                 Pts(i).xUpN=interp1(app.t,app.Xnorm(:,i),Pts(i).tUp);
-%                 end
-%                 if ~isempty(Pts(i).tDown)
-%                 Pts(i).xDownR=interp1(app.t,app.Xraw(:,i),Pts(i).tDown);
-%                 Pts(i).xDownN=interp1(app.t,app.Xnorm(:,i),Pts(i).tDown);
-%                 end
-%             end
-%             for interval=1:size(app.tIntervals,1)
-%                 
-%                    
-%                 thisPts=Pts;
-%                 for i=1:app.nTraces
-%                     ix=Pts(i).tUp>=app.tIntervals(interval,1)&Pts(i).tUp<=app.tIntervals(interval,2); %both have = to catch last point...
-%                     thisPts(i).tUp=Pts(i).tUp(ix);
-%                     thisPts(i).xUp=Pts(i).xUp(ix);
-%                     thisPts(i).xUpR=Pts(i).xUpR(ix);
-%                     thisPts(i).xUpN=Pts(i).xUpN(ix);
-%                     
-%                     ix=Pts(i).tDown>=app.tIntervals(interval,1)&Pts(i).tDown<=app.tIntervals(interval,2); %both have = to catch last point...
-%                     thisPts(i).tDown=Pts(i).tDown(ix);
-%                     thisPts(i).xDown=Pts(i).xDown(ix);
-%                     thisPts(i).xDownR=Pts(i).xDownR(ix);
-%                     thisPts(i).xDownN=Pts(i).xDownN(ix);
-%                 end
-%                 
-%                 app.trace{interval}.points=thisPts;
-%                 
-% %                 app.trace{interval}.features=thisF;
-%             end
-
-%             %run plateau detector separately on each interval.
+            %             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac);
+            % %             [Pts,F]=plateau_detector(app.t, app.Xfilt, app.thrFrac,'ThresholdPercentiles',app.thrPrct);
+            %             for i=1:app.nTraces
+            %                 if ~isempty(Pts(i).tUp)
+            %                 Pts(i).xUpR=interp1(app.t,app.Xraw(:,i),Pts(i).tUp);
+            %                 Pts(i).xUpN=interp1(app.t,app.Xnorm(:,i),Pts(i).tUp);
+            %                 end
+            %                 if ~isempty(Pts(i).tDown)
+            %                 Pts(i).xDownR=interp1(app.t,app.Xraw(:,i),Pts(i).tDown);
+            %                 Pts(i).xDownN=interp1(app.t,app.Xnorm(:,i),Pts(i).tDown);
+            %                 end
+            %             end
+            %             for interval=1:size(app.tIntervals,1)
+            %
+            %
+            %                 thisPts=Pts;
+            %                 for i=1:app.nTraces
+            %                     ix=Pts(i).tUp>=app.tIntervals(interval,1)&Pts(i).tUp<=app.tIntervals(interval,2); %both have = to catch last point...
+            %                     thisPts(i).tUp=Pts(i).tUp(ix);
+            %                     thisPts(i).xUp=Pts(i).xUp(ix);
+            %                     thisPts(i).xUpR=Pts(i).xUpR(ix);
+            %                     thisPts(i).xUpN=Pts(i).xUpN(ix);
+            %
+            %                     ix=Pts(i).tDown>=app.tIntervals(interval,1)&Pts(i).tDown<=app.tIntervals(interval,2); %both have = to catch last point...
+            %                     thisPts(i).tDown=Pts(i).tDown(ix);
+            %                     thisPts(i).xDown=Pts(i).xDown(ix);
+            %                     thisPts(i).xDownR=Pts(i).xDownR(ix);
+            %                     thisPts(i).xDownN=Pts(i).xDownN(ix);
+            %                 end
+            %
+            %                 app.trace{interval}.points=thisPts;
+            %
+            % %                 app.trace{interval}.features=thisF;
+            %             end
+            
+            %run plateau detector separately on each interval.
             for interval=1:size(app.tIntervals,1)
                 ix=app.t>=app.tIntervals(interval,1)&app.t<=app.tIntervals(interval,2); %both have = to catch last point...
-                [Pts,F]=plateau_detector(app.t(ix), app.Xfilt(ix,:), [0.4,0.3]);
+                T=app.t(ix);
+                XRAW=app.Xraw(ix,:);
+                XNORM=app.Xnorm(ix,:);
+                XFILT=app.Xfilt(ix,:);
+                [Pts,F]=plateau_detector(T, XFILT, app.thrFrac);
                 
                 % interpolate the values of Xraw/Xnorm at feature detector times
                 for i=1:app.nTraces
-                    if ~isempty(Pts(i).tUp)
-                    Pts(i).xUpR=interp1(app.t(ix),app.Xraw(ix,i),Pts(i).tUp);
-                    Pts(i).xUpN=interp1(app.t(ix),app.Xnorm(ix,i),Pts(i).tUp);
-                    end
-                    if ~isempty(Pts(i).tDown)
-                    Pts(i).xDownR=interp1(app.t(ix),app.Xraw(ix,i),Pts(i).tDown);
-                    Pts(i).xDownN=interp1(app.t(ix),app.Xnorm(ix,i),Pts(i).tDown);
+                    nT=length(Pts(i).tUp)-1;
+                    if nT>0
+                        Pts(i).xUpR=interp1(T,XRAW(:,i),Pts(i).tUp);
+                        Pts(i).xUpN=interp1(T,XNORM(:,i),Pts(i).tUp);
+                        
+                        Pts(i).xDownR=interp1(T,XRAW(:,i),Pts(i).tDown);
+                        Pts(i).xDownN=interp1(T,XNORM(:,i),Pts(i).tDown);
+                        
+                        for j=1:nT
+                            tt=Pts(i).iUp(j):Pts(i).iUp(j+1)-1;
+                            [xmax,imax]=max(XRAW(tt,i));
+                            Pts(i).iMaxR(j)=tt(1)+imax-1;
+                            Pts(i).tMaxR(j)=T(tt(imax));
+                            Pts(i).xMaxR(j)=xmax;
+                            
+                            [xmax,imax]=max(XNORM(tt,i));
+                            Pts(i).iMaxN(j)=tt(1)+imax-1;
+                            Pts(i).tMaxN(j)=T(tt(imax));
+                            Pts(i).xMaxN(j)=xmax;
+                            
+                            [xmin,imin]=min(XRAW(tt,i));
+                            Pts(i).iMinR(j)=tt(1)+imin-1;
+                            Pts(i).tMinR(j)=T(tt(imin));
+                            Pts(i).xMinR(j)=xmin;
+                            
+                            [xmin,imin]=min(XNORM(tt,i));
+                            Pts(i).iMinN(j)=tt(1)+imin-1;
+                            Pts(i).tMinN(j)=T(tt(imin));
+                            Pts(i).xMinN(j)=xmin;
+                        end
                     end
                 end
                 app.trace{interval}.points=Pts;
@@ -295,8 +325,9 @@ classdef OscillationAnalyzer<handle
         function buildGUI(app)
             app.hFig=figure('Name',['Oscillation Analyzer - ',app.datafilename],'NumberTitle','off');
             app.hFig.KeyPressFcn=@app.keyPressDecoder;
+            app.hFig.Position=[20,20,];
             
-            app.hAxRaw=subplot(3,1,1); 
+            app.hAxRaw=subplot(3,1,1);
             app.hAxNorm=subplot(3,1,2);
             app.hAxFilt=subplot(3,1,3);
             
@@ -306,23 +337,23 @@ classdef OscillationAnalyzer<handle
             
             app.hLraw=plot(app.hAxRaw,app.t,app.Xraw,'color',app.lightgray,'LineWidth',app.bgLineWidth);
             app.hLnorm=plot(app.hAxNorm,app.t,app.Xnorm,'color',app.lightgray,'LineWidth',app.bgLineWidth);
-            app.hLfilt=plot(app.hAxFilt,app.t,app.Xfilt,'color',app.lightgray,'LineWidth',app.bgLineWidth); 
+            app.hLfilt=plot(app.hAxFilt,app.t,app.Xfilt,'color',app.lightgray,'LineWidth',app.bgLineWidth);
             
             Tlim=[min(app.t),max(app.t)];
             
             ylabel(app.hAxRaw,'Xraw')
-%             axis(app.hAxRaw,'tight')
+            %             axis(app.hAxRaw,'tight')
             app.hAxRaw.XLim=Tlim;
             app.hAxRaw.YLim=[min(app.Xraw(:)),max(app.Xraw(:))];
             
             ylabel(app.hAxNorm,'Xnorm,detrend')
-%             axis(app.hAxNorm,'tight')
+            %             axis(app.hAxNorm,'tight')
             app.hAxNorm.XLim=Tlim;
             app.hAxNorm.YLim=[min(app.Xnorm(:)),max(app.Xnorm(:))];
             
             xlabel(app.hAxFilt,'Time')
             ylabel(app.hAxFilt,'Xfilt')
-%             axis(app.hAxFilt,'tight')
+            %             axis(app.hAxFilt,'tight')
             app.hAxFilt.XLim=Tlim;
             app.hAxFilt.YLim=[min(app.Xfilt(:)),max(app.Xfilt(:))];
             
@@ -348,7 +379,7 @@ classdef OscillationAnalyzer<handle
             app.hLraw(app.oldix).LineWidth=app.bgLineWidth;
             app.hLraw(app.oldix).ZData=zeros(size(app.t));
             
-            app.hLraw(app.tix).Color='k'; %black
+            app.hLraw(app.tix).Color='k';
             app.hLraw(app.tix).LineWidth=app.boldLineWidth; %bold
             app.hLraw(app.tix).ZData=ones(size(app.t)); %on top of others
             
@@ -357,7 +388,7 @@ classdef OscillationAnalyzer<handle
             app.hLnorm(app.oldix).LineWidth=app.bgLineWidth;
             app.hLnorm(app.oldix).ZData=zeros(size(app.t));
             
-            app.hLnorm(app.tix).Color='k'; %black
+            app.hLnorm(app.tix).Color='k';
             app.hLnorm(app.tix).LineWidth=app.boldLineWidth; %bold
             app.hLnorm(app.tix).ZData=ones(size(app.t)); %on top of others
             
@@ -377,24 +408,33 @@ classdef OscillationAnalyzer<handle
             hold(app.hAxFilt,'on')
             for interval=1:size(app.tIntervals,1)
                 Pts=app.trace{interval}.points(app.tix);
-                
                 if ~isempty(Pts.tUp)
                     plot(app.hAxRaw,Pts.tUp,Pts.xUpR,'bs','Tag','spMarks');
                     plot(app.hAxNorm,Pts.tUp,Pts.xUpN,'bs','Tag','spMarks');
                     plot(app.hAxFilt,Pts.tUp,Pts.xUp,'bs','Tag','spMarks');
-                    thrUp=Pts.xUp(1);
-                    plot(app.hAxFilt,xlim(),thrUp*[1,1],'r--','Tag','spMarks');
+                    plot(app.hAxFilt,app.tIntervals(interval,:),Pts.thrUp*[1,1],'r--','Tag','spMarks');
                 end
                 if ~isempty(Pts.tDown)
                     plot(app.hAxRaw,Pts.tDown,Pts.xDownR,'bo','Tag','spMarks');
                     plot(app.hAxNorm,Pts.tDown,Pts.xDownN,'bo','Tag','spMarks');
                     plot(app.hAxFilt,Pts.tDown,Pts.xDown,'bo','Tag','spMarks');
-                    thrDown=Pts.xDown(1);
-                    if thrUp~=thrDown
-                        plot(app.hAxFilt,xlim(),thrDown*[1,1],'b--','Tag','spMarks');
+                    if Pts.thrUp~=Pts.thrDown
+                        plot(app.hAxFilt,app.tIntervals(interval,:),Pts.thrDown*[1,1],'b--','Tag','spMarks');
                     end
                 end
-
+                if ~isempty(Pts.tMax)
+                    plot(app.hAxRaw,Pts.tMaxR,Pts.xMaxR,'rv','Tag','spMarks');
+                    plot(app.hAxNorm,Pts.tMaxN,Pts.xMaxN,'rv','Tag','spMarks');
+                    plot(app.hAxFilt,Pts.tMax,Pts.xMax,'rv','Tag','spMarks');
+                    plot(app.hAxFilt,app.tIntervals(interval,:),Pts.thrUp*[1,1],'r--','Tag','spMarks');
+                end
+                if ~isempty(Pts.tMin)
+                    plot(app.hAxRaw,Pts.tMinR,Pts.xMinR,'r^','Tag','spMarks');
+                    plot(app.hAxNorm,Pts.tMinN,Pts.xMinN,'r^','Tag','spMarks');
+                    plot(app.hAxFilt,Pts.tMin,Pts.xMin,'r^','Tag','spMarks');
+                    plot(app.hAxFilt,app.tIntervals(interval,:),Pts.thrUp*[1,1],'r--','Tag','spMarks');
+                end
+                
             end
             hold(app.hAxRaw,'off')
             hold(app.hAxNorm,'off')
@@ -459,24 +499,24 @@ classdef OscillationAnalyzer<handle
                 [filename,path]=uigetfile({'*.xls*'});
                 filename=[path,filename];
             end
-
+            
             [app.datafilepath,app.datafilename]=fileparts(filename);
             
             [data,header]=xlsread(filename);
             time=data(:,1);
             X=data(:,2:end);
-
+            
             %decode header info
             opts=[]; %placeholder
-
+            
             %interpolate any missing data using neighboring time points
             rowIsNan=any(isnan(X),2);
             timeIsNan=isnan(time);
-
+            
             if any(rowIsNan)
-            %                 flag=[flag,{'some rows have NaN'}];
+                %                 flag=[flag,{'some rows have NaN'}];
                 r=find(rowIsNan);
-
+                
                 if r(1)==1
                     time=time(2:end,1);
                     X=X(2:end,:);
@@ -496,15 +536,15 @@ classdef OscillationAnalyzer<handle
             app.t=time;
             app.Xraw=X;
             
-                
+            
             if ~exist('tCond','var')
                 tCond=[];
             end
-
+            
             app.dt=mode(diff(app.t));
             app.fs=1/app.dt;
-%             tOmit=0;
-            app.nOmit=round(app.tOmit/app.dt); 
+            %             tOmit=0;
+            app.nOmit=round(app.tOmit/app.dt);
             tCond=[app.t(1),tCond(:)',app.t(end)];
             for i=1:length(tCond)-1
                 app.tIntervals(i,:)=[tCond(i),tCond(i+1)];

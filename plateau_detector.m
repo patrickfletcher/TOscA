@@ -46,10 +46,11 @@ isUp=X(1,:)>thrUp;
 
 % DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
 
-trace(nX)=struct('tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
-                 'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
-                 'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
-                 'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
+trace(nX)=struct('range',[],'thrUp',[],'thrDown',[],...
+    'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
+    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
+    'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
+    'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
 for i=2:length(t)
     
     %if strated up, then went below thrUp but not below thrDown, set isUp=0
@@ -129,6 +130,10 @@ numUp=arrayfun(@(x) length(x.tUp),trace);
 features=struct('T',[],'APD',[],'PF',[],'amp',[]);
 for i=1:nX
     
+    trace(i).range=globalXamp(i);
+    trace(i).thrUp=thrUp(i);
+    trace(i).thrDown=thrDown(i);
+    
     if numel(trace(i).tUp)>1
         
     %trim so tups contain all tdowns
@@ -151,23 +156,23 @@ for i=1:nX
     for j=1:nT
         tt=trace(i).iUp(j):trace(i).iUp(j+1)-1;
         [xmax,imax]=max(X(tt,i));
-        trace(i).iMax(j)=imax;
+        trace(i).iMax(j)=tt(1)+imax-1;
         trace(i).tMax(j)=t(tt(imax));
         trace(i).xMax(j)=xmax;
         
         [xmin,imin]=min(X(tt,i));
-        trace(i).iMin(j)=imin;
+        trace(i).iMin(j)=tt(1)+imin-1;
         trace(i).tMin(j)=t(tt(imin));
         trace(i).xMin(j)=xmin;
         
 %         [dxmax,idxmax]=max(DX(tt,i));
-%         trace(i).iDXMax(j)=idxmax;
+%         trace(i).iDXMax(j)=tt(1)+idxmax-1;
 %         trace(i).tDXMax(j)=t(tt(idxmax));
 %         trace(i).xDXMax(j)=X(tt(idxmax),i);
 %         trace(i).dxMax(j)=dxmax;
 %         
 %         [dxmin,idxmin]=min(DX(tt,i));
-%         trace(i).iDXMin(j)=idxmin;
+%         trace(i).iDXMin(j)=tt(1)+idxmin-1;
 %         trace(i).tDXMin(j)=t(tt(idxmin));
 %         trace(i).xDXMin(j)=X(tt(idxmin),i);
 %         trace(i).dxMin(j)=dxmin;
