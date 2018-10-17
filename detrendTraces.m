@@ -33,6 +33,25 @@ switch lower(method)
             XTrend(:,i)=polyval(polyfit(t,X(:,i),degree),t);
         end
 
+    case {'ptile'}
+        %use a moving window prctile
+        %methodparam=window width
+        if ~exist('methodparam','var')||isempty(methodparam)
+            error('smoothdata trendline requires a window duration (in time units)');
+        else
+            wwidth=methodparam{1};
+            ptile=methodparam{2};
+        end
+        wsz=round(wwidth/dt);
+        wsz=max(wsz,1);
+        wsz2=ceil(wsz/2);
+        for i=wsz2:length(t)-wsz2
+            ix=i-wsz2+1:i+wsz2;
+            XTrend(i,:)=prctile(X(ix,:),ptile,1);
+        end
+        XTrend(1:wsz2-1,:)=repmat(XTrend(wsz2,:),wsz2-1,1);
+        XTrend(end-wsz2+1:end,:)=repmat(XTrend(end-wsz2,:),wsz2,1);
+        
     case {'lowpass'}
         
         %methodparam=lowpass cutoff frequency
@@ -67,6 +86,7 @@ switch lower(method)
         end
         
         wsz=round(wwidth/dt);
+        wsz=max(wsz,1);
         XTrend=smoothdata(X,method,wsz);
 end
 

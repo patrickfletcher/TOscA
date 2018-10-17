@@ -174,6 +174,10 @@ classdef OscillationAnalyzer<handle
             
             
             %final normalization per interval, useful for threshold detect
+            XFILT=normalizeTraces(T,XFILT,'wptile',{15,[0,100]});
+            XFILT(XFILT>1)=1;
+            XFILT(XFILT<0)=0;
+
 %             for i=1:size(app.tIntervals,1)
 %                 ix=app.t>=app.tIntervals(i,1)&app.t<=app.tIntervals(i,2); %both have = to catch last point...
 % %                 XFILT(ix,:)=normalizeTraces(T(ix),XFILT(ix,:),'unit',[]);
@@ -325,7 +329,7 @@ classdef OscillationAnalyzer<handle
         function buildGUI(app)
             app.hFig=figure('Name',['Oscillation Analyzer - ',app.datafilename],'NumberTitle','off');
             app.hFig.KeyPressFcn=@app.keyPressDecoder;
-            app.hFig.Position=[20,20,];
+%             app.hFig.Position=[20,20,];
             
             app.hAxRaw=subplot(3,1,1);
             app.hAxNorm=subplot(3,1,2);
