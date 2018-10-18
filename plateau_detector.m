@@ -104,28 +104,7 @@ for i=2:length(t)
     
 end
 
-%remove downward transitions that are outside the first or last upward
-%transition
-
 numUp=arrayfun(@(x) length(x.tUp),trace);
-
-% firstIsDown=arrayfun(@(x) x.tDown(1)<x.tUp(1),trace);
-% lastIsDown=arrayfun(@(x) x.tDown(end)>x.tUp(end),trace);
-% 
-% idx=find(firstIsDown);
-% for j=idx
-%     trace(j).iDown=trace(j).iDown(2:end);
-%     trace(j).tDown=trace(j).tDown(2:end);
-%     trace(j).xDown=trace(j).xDown(2:end);
-% end
-% idx=find(lastIsDown);
-% for j=idx
-%     trace(j).iDown=trace(j).iDown(1:end-1);
-%     trace(j).tDown=trace(j).tDown(1:end-1);
-%     trace(j).xDown=trace(j).xDown(1:end-1);
-% end
-
-% append trace dependent info?
 
 features=struct('T',[],'APD',[],'PF',[],'amp',[]);
 for i=1:nX
