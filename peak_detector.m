@@ -125,7 +125,7 @@ for i=1:nX
     nPer=length(features(i).period);
     features(i).active=false(size(t)); %indicators for active/silent (for plotting)
     for j=1:nPer
-        ix=points(i).iMin(j):points(i).iMin(j+1);
+        ix=points(i).iMin(j)-1:points(i).iMin(j+1)+1;
         tt=t(ix);
         xx=X(ix,i);
         
@@ -134,9 +134,20 @@ for i=1:nX
         iup=find(up,1,'first'); %assume any intermediate crossings still part of the up state
         idwn=find(up,1,'last');
         
-        %interpolate t
-        tup=(thr-xx(iup-1))*(tt(iup)-tt(iup-1))/(xx(iup)-xx(iup-1))+tt(iup-1);
-        tdwn=(thr-xx(idwn))*(tt(idwn+1)-tt(idwn))/(xx(idwn+1)-xx(idwn))+tt(idwn);
+        %interpolate t - note if baseline is super uneven, can be first or
+        %last element: gives error, need to index into full t/X
+        
+%         tup=interp1(xx(iup-1:iup),tt(iup-1:iup),thr);
+%         tdwn=interp1(xx(idwn:idwn+1),tt(idwn:idwn+1),thr);
+
+%         tup=interp1(X(ix(iup-1:iup)),t(ix(iup-1:iup)),thr);
+%         tdwn=interp1(X(ix(idwn:idwn+1)),t(ix(idwn:idwn+1)),thr);
+        
+        tup=(thr-X(ix(iup)-1,i))*(t(ix(iup))-t(ix(iup)-1))/(X(ix(iup),i)-X(ix(iup)-1,i))+t(ix(iup)-1);
+        tdwn=(thr-X(ix(idwn),i))/(X(ix(idwn)+1,i)-X(ix(idwn),i))*(t(ix(idwn)+1)-t(ix(idwn)))+t(ix(idwn));
+
+%         tup=(thr-xx(iup-1))*(tt(iup)-tt(iup-1))/(xx(iup)-xx(iup-1))+tt(iup-1);
+%         tdwn=(thr-xx(idwn))*(tt(idwn+1)-tt(idwn))/(xx(idwn+1)-xx(idwn))+tt(idwn);
                 
         points(i).iUp(j)=iup;
         points(i).tUp(j)=tup;
@@ -152,8 +163,17 @@ for i=1:nX
     features(i).APD=points(i).tDown-points(i).tUp;
     features(i).PF=features(i).APD./features(i).period;
    
+    else
+        %had less than two minima: can't compute features.
+        features(i).period=0;
+        features(i).baseline=0;
+        features(i).peaks=0;
+        features(i).amp=0;
+        features(i).APD=0;
+        features(i).PF=0;
     end
 end
+
 
 
 %plot to show performance
@@ -181,6 +201,8 @@ end
         plot(t,thisX,'k-','Tag','plateau_detector')
         axis tight
         hold on
+        
+        if length(points(tix).tMin)>1
 
         tupdwn=[points(tix).tUp; points(tix).tDown];
         ythresh=[1;1]*features(tix).pthresh;
@@ -215,7 +237,7 @@ end
 %         plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
 %         plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
 
-
+        end
         xlabel('t')
         ylabel('x')
         YLIM=ylim();
