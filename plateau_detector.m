@@ -1,4 +1,4 @@
-function [trace,features]=plateau_detector(t, X, varargin)
+function [points,features]=plateau_detector(t, X, varargin)
 %PLATEAU_DETECTOR A plateau detector for oscillating timeseries. Uses Shmitt
 % trigger concept - upward transition threshold >= downward transition
 % threshold. The timeseries is divided into periods measured from upward
@@ -23,9 +23,16 @@ function [trace,features]=plateau_detector(t, X, varargin)
 %
 % Outputs:
 %  features - struct containg feature distributions for each column of X
-%  trace - struct containing special points, for plotting
+%  points - struct containing special points, for plotting
 
 %check inputs and parse optional parameters
+
+periodMarker='min';
+
+if isvector(X)
+    X=X(:);
+end
+    
 [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
@@ -42,30 +49,33 @@ else
     thrDown=thrUp;
 end
 
+%TODO: make sure initialization of upstate toggle is robust
+DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
+% isUp=ones(1,nX); %forces first point to be downward transition
+% isUp=zeros(1,nX); %forces first point to be upward transition
 isUp=X(1,:)>thrUp;
+% isUp=X(1,:)>=thrUp | (X(1,:)<=thrUp&X(1,:)>=thrDown&DX(1,:)<0);
 
-% DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
-
-trace(nX)=struct('range',[],'thrUp',[],'thrDown',[],...
+points(nX)=struct('range',[],'thrUp',[],'thrDown',[],...
     'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
-    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
-    'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
-    'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
+    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[]);
+%     'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
+%     'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
 for i=2:length(t)
     
     %if strated up, then went below thrUp but not below thrDown, set isUp=0
-    firstDown=isUp & X(i,:)<thrUp & arrayfun(@(x)isempty(x.iUp),trace);
-    isUp(firstDown)=0;
+%     firstDown=isUp & X(i,:)<thrUp & arrayfun(@(x)isempty(x.iUp),points);
+%     isUp(firstDown)=0;
     
     %check for downward-transition and upward-transition
-    isDownTransition=isUp&X(i,:)<thrDown;
-    isUpTransition=~isUp&X(i,:)>thrUp;
+    isDownTransition=isUp&X(i,:)<=thrDown;
+    isUpTransition=~isUp&X(i,:)>=thrUp;
     
     if any(isDownTransition)
         idx=find(isDownTransition);
         for j=idx
             %index
-            trace(j).iDown=[trace(j).iDown,i];
+            points(j).iDown(end+1)=i;
             
             if doInterp
                 %interpolate t
@@ -76,8 +86,8 @@ for i=2:length(t)
                 thisX=X(i,j);
             end
             
-            trace(j).tDown=[trace(j).tDown,thisT];
-            trace(j).xDown=[trace(j).xDown,thisX];
+            points(j).tDown(end+1)=thisT;
+            points(j).xDown(end+1)=thisX;
         end
         isUp(isDownTransition)=0;
     end
@@ -85,7 +95,7 @@ for i=2:length(t)
     if any(isUpTransition)
         idx=find(isUpTransition);
         for j=idx
-            trace(j).iUp=[trace(j).iUp,i];
+            points(j).iUp(end+1)=i;
             
             if doInterp
                 %interpolate t
@@ -96,68 +106,68 @@ for i=2:length(t)
                 thisX=X(i,j);
             end
             
-            trace(j).tUp=[trace(j).tUp,thisT];
-            trace(j).xUp=[trace(j).xUp,thisX];
+            points(j).tUp(end+1)=thisT;
+            points(j).xUp(end+1)=thisX;
         end
         isUp(isUpTransition)=1;
     end
     
 end
 
-numUp=arrayfun(@(x) length(x.tUp),trace);
+numUp=arrayfun(@(x) length(x.tUp),points);
 
 features=struct('T',[],'APD',[],'PF',[],'amp',[]);
 for i=1:nX
     
-    trace(i).range=globalXamp(i);
-    trace(i).thrUp=thrUp(i);
-    trace(i).thrDown=thrDown(i);
-    
-    if numel(trace(i).tUp)>1
+    points(i).range=globalXamp(i);
+    points(i).thrUp=thrUp(i);
+    points(i).thrDown=thrDown(i);
         
-    %trim so tups contain all tdowns
-    if trace(i).tDown(1)<trace(i).tUp(1)
-        trace(i).iDown=trace(i).iDown(2:end);
-        trace(i).tDown=trace(i).tDown(2:end);
-        trace(i).xDown=trace(i).xDown(2:end);
+    if numel(points(i).tUp)>1
+    
+%     trim
+    if points(i).tDown(1)<=points(i).tUp(1)
+        points(i).iDown=points(i).iDown(2:end);
+        points(i).tDown=points(i).tDown(2:end);
+        points(i).xDown=points(i).xDown(2:end);
     end
-    if trace(i).tDown(end)>trace(i).tUp(end)
-        trace(i).iDown=trace(i).iDown(1:end-1);
-        trace(i).tDown=trace(i).tDown(1:end-1);
-        trace(i).xDown=trace(i).xDown(1:end-1);
+    if points(i).tDown(end)>=points(i).tUp(end)
+        points(i).iDown=points(i).iDown(1:end-1);
+        points(i).tDown=points(i).tDown(1:end-1);
+        points(i).xDown=points(i).xDown(1:end-1);
     end
     
-    nT=length(trace(i).tUp)-1;
-    features(i).T=diff(trace(i).tUp);
-    features(i).APD=trace(i).tDown-trace(i).tUp(1:end-1); %active phase duration
+    nT=length(points(i).tUp)-1;
+    features(i).T=diff(points(i).tUp);
+    features(i).APD=points(i).tDown-points(i).tUp(1:end-1); %active phase duration
     features(i).PF=features(i).APD./features(i).T;
     
     for j=1:nT
-        tt=trace(i).iUp(j):trace(i).iUp(j+1)-1;
+        tt=points(i).iUp(j):points(i).iUp(j+1)-1;
         [xmax,imax]=max(X(tt,i));
-        trace(i).iMax(j)=tt(1)+imax-1;
-        trace(i).tMax(j)=t(tt(imax));
-        trace(i).xMax(j)=xmax;
+        points(i).iMax(j)=tt(1)+imax-1;
+        points(i).tMax(j)=t(tt(imax));
+        points(i).xMax(j)=xmax;
         
         [xmin,imin]=min(X(tt,i));
-        trace(i).iMin(j)=tt(1)+imin-1;
-        trace(i).tMin(j)=t(tt(imin));
-        trace(i).xMin(j)=xmin;
+        points(i).iMin(j)=tt(1)+imin-1;
+        points(i).tMin(j)=t(tt(imin));
+        points(i).xMin(j)=xmin;
         
 %         [dxmax,idxmax]=max(DX(tt,i));
-%         trace(i).iDXMax(j)=tt(1)+idxmax-1;
-%         trace(i).tDXMax(j)=t(tt(idxmax));
-%         trace(i).xDXMax(j)=X(tt(idxmax),i);
-%         trace(i).dxMax(j)=dxmax;
+%         points(i).iDXMax(j)=tt(1)+idxmax-1;
+%         points(i).tDXMax(j)=t(tt(idxmax));
+%         points(i).xDXMax(j)=X(tt(idxmax),i);
+%         points(i).dxMax(j)=dxmax;
 %         
 %         [dxmin,idxmin]=min(DX(tt,i));
-%         trace(i).iDXMin(j)=tt(1)+idxmin-1;
-%         trace(i).tDXMin(j)=t(tt(idxmin));
-%         trace(i).xDXMin(j)=X(tt(idxmin),i);
-%         trace(i).dxMin(j)=dxmin;
+%         points(i).iDXMin(j)=tt(1)+idxmin-1;
+%         points(i).tDXMin(j)=t(tt(idxmin));
+%         points(i).xDXMin(j)=X(tt(idxmin),i);
+%         points(i).dxMin(j)=dxmin;
     end
     
-    features(i).amp=trace(i).xMax-trace(i).xMin;
+    features(i).amp=points(i).xMax-points(i).xMin;
     end
 end
 
@@ -186,19 +196,22 @@ end
         delete(findobj(gca,'Tag','plateau_detector'));
 
         plot(t,X(:,tix),'k-','Tag','plateau_detector')
+        axis tight
         hold on
-        plot(trace(tix).tUp,trace(tix).xUp,'bs','Tag','plateau_detector')
-        plot(trace(tix).tDown,trace(tix).xDown,'bo','Tag','plateau_detector')
-        plot(trace(tix).tMax,trace(tix).xMax,'rv','Tag','plateau_detector')
-        plot(trace(tix).tMin,trace(tix).xMin,'r^','Tag','plateau_detector')
-%         plot(trace(tix).tDXMax,trace(tix).xDXMax,'g>','Tag','plateau_detector')
-%         plot(trace(tix).tDXMin,trace(tix).xDXMin,'g<','Tag','plateau_detector')
+        plot(points(tix).tUp,points(tix).xUp,'bs','Tag','plateau_detector')
+        plot(points(tix).tDown,points(tix).xDown,'bo','Tag','plateau_detector')
+        plot(points(tix).tMax,points(tix).xMax,'rv','Tag','plateau_detector')
+        plot(points(tix).tMin,points(tix).xMin,'r^','Tag','plateau_detector')
+%         plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
+%         plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
         plot(xlim(),thrUp(tix)*[1,1],'r--','Tag','plateau_detector')
         if thrUp~=thrDown
             plot(xlim(),thrDown(tix)*[1,1],'b--','Tag','plateau_detector')
         end
         xlabel('t')
         ylabel('x')
+        YLIM=ylim();
+        ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
     end
 
     function keypressFcn(~,event)
@@ -226,7 +239,7 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(
     thrPtiles=[0,100];
     doInterp=true;
     doPlot=false;
-    doKeypress=false;
+    doKeypress=true;
     figID=[];
     
     p=inputParser;
