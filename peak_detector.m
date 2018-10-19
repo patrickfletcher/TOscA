@@ -27,9 +27,10 @@ function [points,features]=peak_detector(t, X, varargin)
 %check inputs and parse optional parameters
 % [thrPtiles,delta,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
-delta=0.25;
+delta=0.5;
 deltaIsFraction=true;
 thrPtiles=[0,100];
+activeFraction=0.5;
 
 nX=size(X,2); %number of traces
 
@@ -41,6 +42,7 @@ if deltaIsFraction
     delta=delta*globalXamp;
 end
 
+hold off; plot(t,X); hold on
 
 points(nX)=struct('range',[],...
     'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[]);
@@ -48,61 +50,81 @@ points(nX)=struct('range',[],...
 maxIsNext=zeros(1,nX); %always look for a minimum first
 lastMax=X(1,:); %initialize first point
 lastMin=X(1,:);
+maxix=ones(1,nX);
+minix=ones(1,nX);
 for i=2:length(t)
     this=X(i,:);
-    lastMax=max(this,lastMax);
-    lastMin=min(this,lastMin);
+    [lastMax,maxrow]=max([this;lastMax],[],1); %update most recent maximum for all traces
+    maxix(maxrow==1)=i; %maxrow==1 means new max was found, maxrow==2 if lastMax was higher.
+    [lastMin,minrow]=min([this;lastMin],[],1);
+    minix(minrow==1)=i;
     
-    maxCondition=maxIsNext & this<lastMax-delta;
-    idx=find(maxCondition);
+    maxFound=maxIsNext & this<lastMax-delta;
+    idx=find(maxFound); %for each trace with max found, store the point
     for j=idx
-        points(j).iMax(end+1)=i;
-        points(j).tMax(end+1)=t(i);
+        points(j).iMax(end+1)=maxix(j);
+        points(j).tMax(end+1)=t(maxix(j));
         points(j).xMax(end+1)=lastMax(j);
+        lastMin(maxFound)=this;
+        minix(maxFound)=i;
+%         lastMax(maxFound)=-Inf;
+        maxIsNext(maxFound)=false;
+        plot(points(j).tMax(end),points(j).xMax(end),'v');
     end
-    lastMin(maxCondition)=this(maxCondition);
     
-    minCondition=~maxIsNext & this>lastMin+delta; 
-    idx=find(minCondition);
+    minFound=~maxIsNext & this>lastMin+delta; 
+    idx=find(minFound);
     for j=idx
-        points(j).iMin(end+1)=i;
-        points(j).tMin(end+1)=t(i);
+        points(j).iMin(end+1)=minix(j);
+        points(j).tMin(end+1)=t(minix(j));
         points(j).xMin(end+1)=lastMin(j);
+%         lastMin(minFound)=Inf;
+        lastMax(minFound)=this;
+        maxix(minFound)=i;
+        maxIsNext(minFound)=true;
+        plot(points(j).tMin(end),points(j).xMin(end),'^');
     end
-    lastMax(minCondition)=this(minCondition);
     
 end
 
+for j=1:nX
+plot(points(j).tMax,points(j).xMax,'v');
+plot(points(j).tMin,points(j).xMin,'^');
+end
 
 
 features=struct('T',[],'APD',[],'PF',[],'amp',[]);
 for i=1:nX
-    
     points(i).range=globalXamp(i);
-    points(i).thrUp=thrUp(i);
-    points(i).thrDown=thrDown(i);
     
-    if numel(points(i).tUp)>1
+    if numel(points(i).tMin)>1
         
-    %trim so tups contain all tdowns
-    if points(i).tDown(1)<points(i).tUp(1)
-        points(i).iDown=points(i).iDown(2:end);
-        points(i).tDown=points(i).tDown(2:end);
-        points(i).xDown=points(i).xDown(2:end);
+    %trim leading and trailing maxima
+    if points(i).tMax(1)<points(i).tMin(1)
+        points(i).iMax=points(i).iMax(2:end);
+        points(i).tMax=points(i).tMax(2:end);
+        points(i).xMax=points(i).xMax(2:end);
     end
-    if points(i).tDown(end)>points(i).tUp(end)
-        points(i).iDown=points(i).iDown(1:end-1);
-        points(i).tDown=points(i).tDown(1:end-1);
-        points(i).xDown=points(i).xDown(1:end-1);
+    if points(i).tMax(end)>points(i).tMin(end)
+        points(i).iMax=points(i).iMax(1:end-1);
+        points(i).tMax=points(i).tMax(1:end-1);
+        points(i).xMax=points(i).xMax(1:end-1);
     end
     
-    nT=length(points(i).tUp)-1;
-    features(i).T=diff(points(i).tUp);
-    features(i).APD=points(i).tDown-points(i).tUp(1:end-1); %active phase duration
+    features(i).T=diff(points(i).tMin); %period defined from minimum to minimum
+    
+    %interpolate active phase threshold crossing per period
+    %local linear detrend using two minima?
+    nPer=length(trace(i).tUp)-1;
+    for j=1:nPer
+        
+%         features(i).APD(j)=
+    end
+    
     features(i).PF=features(i).APD./features(i).T;
+    features(i).amp=points(i).xMax-points(i).xMin;
    
     end
-    features(i).amp=points(i).xMax-points(i).xMin;
 end
 
 

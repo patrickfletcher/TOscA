@@ -157,8 +157,8 @@ for i=1:nX
 %         trace(i).dxMin(j)=dxmin;
     end
     
-    end
     features(i).amp=trace(i).xMax-trace(i).xMin;
+    end
 end
 
 % if length(features)~=nX
