@@ -20,9 +20,12 @@ if nargout==0 || doPlot==1
 
     fs=1/mode(diff(t));
     
-    [PN,f]=pspectrum(XNORM,fs,'Leakage',0.9);
-    [PDT,~]=pspectrum(XDT,fs,'Leakage',0.9);
-    [PF,~]=pspectrum(XFILT,fs,'Leakage',0.9);
+    [PN,f]=powerSpectrum(XNORM,fs,[],0);
+    [PDT,~]=powerSpectrum(XDT,fs,[],0);
+    [PF,~]=powerSpectrum(XFILT,fs,[],0);
+%     [PN,f]=pspectrum(XNORM,fs,'Leakage',0.9);
+%     [PDT,~]=pspectrum(XDT,fs,'Leakage',0.9);
+%     [PF,~]=pspectrum(XFILT,fs,'Leakage',0.9);
     
     PN=pow2db(PN);
     PDT=pow2db(PDT);
@@ -60,7 +63,8 @@ if nargout==0 || doPlot==1
     axis tight
 
     ax(4)=subplot(4,1,4);
-    hP=plot(f,PN(:,tix),f,PDT(:,tix),f,PF(:,tix));
+    hP=plot(f(2:end),PN(2:end,tix),f(2:end),PDT(2:end,tix),f(2:end),PF(2:end,tix));
+%     hP=plot(f,PN(:,tix),f,PDT(:,tix),f,PF(:,tix));
     grid on
     xlabel('f')
     ylabel('power (dB)')
@@ -97,9 +101,9 @@ end
         hF.YData=XFILT(:,tix);
         
         %power spectra
-        hP(1).YData=PN(:,tix);
-        hP(2).YData=PDT(:,tix);
-        hP(3).YData=PF(:,tix);
+        hP(1).YData=PN(2:end,tix);
+        hP(2).YData=PDT(2:end,tix);
+        hP(3).YData=PF(2:end,tix);
         
         
     end

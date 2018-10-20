@@ -19,7 +19,7 @@ n=params.n;
 
 L=size(X,1); %assume column is timeseries
 
-f=fs*(0:n/2-1)/n;
+f=fs*(0:n/2-1)/n; f=f(:);
 
 Y=fft(X,n);
 
