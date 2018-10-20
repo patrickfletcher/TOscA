@@ -116,7 +116,7 @@ end
 
 numUp=arrayfun(@(x) length(x.tUp),points);
 
-features=struct('T',[],'APD',[],'PF',[],'amp',[]);
+features=struct('period',[],'APD',[],'PF',[],'amp',[]);
 for i=1:nX
     
     points(i).range=globalXamp(i);
@@ -138,9 +138,9 @@ for i=1:nX
     end
     
     nT=length(points(i).tUp)-1;
-    features(i).T=diff(points(i).tUp);
+    features(i).period=diff(points(i).tUp);
     features(i).APD=points(i).tDown-points(i).tUp(1:end-1); %active phase duration
-    features(i).PF=features(i).APD./features(i).T;
+    features(i).PF=features(i).APD./features(i).period;
     
     for j=1:nT
         tt=points(i).iUp(j):points(i).iUp(j+1)-1;
@@ -168,12 +168,17 @@ for i=1:nX
     end
     
     features(i).amp=points(i).xMax-points(i).xMin;
+    
+    else
+        %had less than two minima: can't compute features.
+        features(i).period=0;
+        features(i).baseline=0;
+        features(i).peaks=0;
+        features(i).amp=0;
+        features(i).APD=0;
+        features(i).PF=0;
     end
 end
-
-% if length(features)~=nX
-%     features(nX).T=[];
-% end
 
 %plot to show performance
 if nargout==0||doPlot==1

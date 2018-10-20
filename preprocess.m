@@ -30,7 +30,9 @@ if nargout==0 || doPlot==1
     
     nX=size(X,2);
     tix=1;oldtix=1;
-    figure('KeyPressFcn',@keypressFcn);
+    
+    figID=gcf;
+    figID.KeyPressFcn=@keypressFcn;
     
     ax(1)=subplot(4,1,1);
     hR=plot(t,X,'Color',0.75*[1,1,1]);

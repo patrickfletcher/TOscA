@@ -125,7 +125,7 @@ for i=1:nX
     nPer=length(features(i).period);
     features(i).active=false(size(t)); %indicators for active/silent (for plotting)
     for j=1:nPer
-        ix=points(i).iMin(j)-1:points(i).iMin(j+1)+1;
+        ix=points(i).iMin(j):points(i).iMin(j+1);
         tt=t(ix);
         xx=X(ix,i);
         
