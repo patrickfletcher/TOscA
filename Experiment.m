@@ -7,30 +7,40 @@ classdef Experiment < handle
         date=''
         sex=''
         animalCondition='' %eg. WT vs KO
-        
-        appNames={''} %eg. '5G', 'Dz',..
-        appTimes=[] %list of start times for each condition
-        tIntervals=[]
-        
         filename=''
         notes={}
         
         t
         dt
-        fs
         
+        segment=struct('name','','endpoints',[],'ix',[])
+        nS
+        
+        %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
         X
         Xnorm
+        Xtrend
         Xdetrend
         Xfilt
         
-        include %set element to zero to exclude a trace
+        include %set element to zero to exclude a trace; X(:,include)
         nX
         
-        group
-        Xg %average traces with same group (always use Rdetrend?)
-        Xgfilt %filter using filterMethod, filterParam
+        %don't want Expt to have to know
+        %if saving undeclared struct doesn't work try cell array for each segment
+        %maybe the detector functions could export struct definition when called with no inputs
+        points={}
+        features={}
+        fnames
         
+        fs %1/dt
+        f
+        psd
+        
+        group
+        nG
+        Xg %average traces with same group (always use Xdetrend? probably)
+        Xgfilt %filter using filterMethod, filterParam
     end
     
     %store parameters used
@@ -50,6 +60,9 @@ classdef Experiment < handle
         averageParam=[]
         
         interpMethod='linear'
+        
+        %keep track of which trace is in focus for plotting - no, this should be a property of the figure
+%         tix=1;
     end
     
     methods
@@ -88,7 +101,7 @@ classdef Experiment < handle
             time=time-time(1); %shift time to start at zero
             Xraw=data(:,2:end);
             
-            DT=mode(diff(time));
+            DT=mode(diff(time)); 
 
             %interpolate any missing data using neighboring time points
             %TODO: make this optional?
@@ -126,7 +139,9 @@ classdef Experiment < handle
 %             expt.t=time;
 %             expt.X=Xraw;
             
-            %instead to interpolate on a fixed grid with given DT
+            %interpolate on a fixed grid with given DT
+            %TODO: DT as parameter (for same DT across expts)
+            % - alt, make this a method with DT parameter
             XI=[];
             ti=0:DT:time(end); ti=ti';
             for j=1:size(Xraw,2)
@@ -140,40 +155,56 @@ classdef Experiment < handle
             expt.dt=DT;
             expt.fs=1/expt.dt;
             
-            % time intervals
-            if ~exist('appTimes','var')
-                appTimes=[];
-            end
-            appTimes=[expt.t(1),appTimes(:)',expt.t(end)];
-            for i=1:length(appTimes)-1
-                expt.tIntervals(i,:)=[appTimes(i),appTimes(i+1)];
-            end
-            expt.appTimes=appTimes(1:end-1);
-            
-            % omit fixed amount of time at beginning/end of intervals?
-%             tOmit=0;
-%             expt.nOmit=round(expt.tOmit/expt.dt); 
+            %default segment = whole trace
+            expt.defineSegments({''},[ti(1),ti(end)]);
 
             expt.include=true(1,expt.nX);
+        end
+        
+        function defineSegments(expt,names,startTimes)
+            %expects names as cell array, times as vector
+            expt.nS=length(names);
+%             expt.segment(expt.nS).name=''; %expand the array of struct
+            startTimes(end+1)=expt.t(end); %append final time
+            for i=1:expt.nS
+                expt.segment(i).name=names{i};
+                expt.segment(i).endpoints=[startTimes(i),startTimes(i+1)];
+                expt.segment(i).ix=expt.t>=startTimes(i) & expt.t<=startTimes(i+1);
+            end
         end
         
         %save results. If required metadata is not set, force user to enter it now
         function save()
         end
         
-        %simple wrappers for preprocessing functions for now
-        %TODO: forced order? if so, simply do a preprocess?
+        %Preprocessing functions
+        %TODO: forced order?
+        %TODO: per-interval, or whole trace option (eg. linear detrend per interval)
         function normalize(expt,method,methodPar,doPlot)
             expt.Xnorm=normalizeTraces(expt.t,expt.X,method,methodPar,doPlot);
             expt.normMethod=method;
             expt.normParam=methodPar;
         end
         
-        function detrend(expt,method,methodPar,doPlot)
+        %detrend supports per-interval: for piecewise linear detrend.
+        function detrend(expt,method,methodPar,perSegment,doPlot)
             if isempty(expt.Xnorm)
                 expt.Xnorm=expt.X;
+                expt.normMethod='none';
+                expt.normParam=[];
             end
-            expt.Xdetrend=detrendTraces(expt.t,expt.Xnorm,method,methodPar,doPlot);
+            if perSegment
+                for i=1:expt.nS
+                    thisIx=expt.segment(i).ix;
+                    %TODO: this plots a figure for each segment. could suppress & make combined plot?
+                    [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),method,methodPar,doPlot);
+                    %TODO: make segments join
+                    expt.Xtrend(thisIx,:)=Xt;
+                    expt.Xdetrend(thisIx,:)=Xdt;
+                end
+            else
+                [expt.Xdetrend,expt.Xtrend]=detrendTraces(expt.t,expt.Xnorm,method,methodPar,doPlot);
+            end
             expt.trendMethod=method;
             expt.trendParam=methodPar;
         end
@@ -181,15 +212,253 @@ classdef Experiment < handle
         function filter(expt,method,methodPar,doPlot)
             if isempty(expt.Xnorm)
                 expt.Xnorm=expt.X;
+                expt.normMethod='none';
+                expt.normParam=[];
             end
             if isempty(expt.Xdetrend)
                 expt.Xdetrend=expt.X;
+                expt.trendMethod='none';
+                expt.trendParam=[];
             end
             expt.Xfilt=filterTraces(expt.t,expt.Xdetrend,method,methodPar,doPlot);
             expt.filterMethod=method;
             expt.filterParam=methodPar;
         end
         
+        
+        %Analysis functions - per interval
+        function periodogram(expt)
+            for i=1:expt.nS
+                thisIx=expt.segment(i).ix;
+                [PSD,F,pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
+                Tpsd=1./fmax;
+                expt.psd(:,:,i)=PSD;
+                
+                for j=1:expt.nX
+                    expt.features{i}(j).Tpsd=Tpsd(j);
+                    expt.features{i}(j).fmax=fmax(j);
+                    expt.features{i}(j).Pmax=pmax(j);
+                end
+            end
+            expt.f=F;
+        end
+        
+        function detect_periods(expt,method,methodPar)
+%             expt.points={};
+%             expt.features={};
+            for i=1:expt.nS
+                thisIx=expt.segment(i).ix;
+                tt=expt.t(thisIx);
+                xx=expt.Xfilt(thisIx,:);
+                switch method
+                    case {'peaks'}
+                        delta=methodPar;
+                        [pts,feats]=peak_detector(tt,xx,delta);
+
+                    case {'threshold'}
+                        frac=methodPar;
+                        [pts,feats]=plateau_detector(tt,xx,frac);
+                end
+                expt.points{i}=pts;
+                expt.features{i}=feats;
+                
+                %also get xvalues for all X types
+                %independently max/min per period for non-filt traces (detrend at least)
+                
+                %get average features per segment per trace
+                
+            end
+            expt.fnames=fieldnames(feats)';
+        end
+        
+        
+        function plotTrace(expt,ax,whichPlot,showPts,tix)
+            %dispatch function for plotting expt data
+                        
+            if isempty(ax)
+                ax=gca;
+            end
+            
+            if ~exist('showPts','var')||isempty(showPts)
+                if ~isempty(expt.points)
+                    showPts=true;
+                else
+                    showPts=false;
+                end
+            end
+            
+            %no tix => interactive figure
+            if ~exist('tix','var')||isempty(tix)
+                tix=1;
+                figID=gcf; %newfig?
+                figID.KeyPressFcn={@expt.traceKeypress,whichPlot,showPts};
+                figID.UserData=tix; %store the current trace ID with figure
+                ax=gca;
+            end
+            
+            expt.plot_t(ax,whichPlot,tix,showPts)
+            
+        end
+        
+        function plotPeriodogram(expt,ax,tix)
+            %overlay psd for each segment
+            if isempty(expt.psd)
+                expt.periodogram();
+            end
+                       
+            if isempty(ax)
+                ax=gca;
+            end
+            
+            if ~exist('tix','var')||isempty(tix)
+                tix=1;
+                figID=gcf; %newfig?
+                figID.KeyPressFcn=@expt.psdKeypress;
+                figID.UserData=tix; %store the current trace ID with figure
+                ax=gca;
+            end
+            
+            expt.plot_psd(ax,tix);
+            
+        end
+        
+        function plotFeature(expt,ax,xname,yname,tix)
+            %xname={t,segment,fnames}
+            %yname={fnames}
+            
+        end
+        
+    end
+    
+    methods (Access=private)
+        
+        function plot_t(expt,ax,whichPlot,tix,showPts)
+            
+            doAllPts=false;
+            switch whichPlot
+                case {'raw'}
+                    x=expt.X(:,tix);
+                    
+                case {'norm'}
+                    x=expt.Xnorm(:,tix);
+                    
+                case {'detrend'}
+                    x=expt.Xdetrend(:,tix);
+                    
+                case {'filt'}
+                    x=expt.Xfilt(:,tix);
+                    doAllPts=true;
+                    
+                otherwise
+                    error([whichPlot, ' is not a supported trace to plot']);
+            end
+            
+            plot(ax,expt.t,x,'k')
+            
+            if showPts
+                for i=1:expt.nS
+                    tt=expt.t(expt.segment(i).ix);
+                    xx=x(expt.segment(i).ix);
+                    pts=expt.points{i}(tix);
+                    hold on
+                    xPer=interp1(tt,xx,pts.tPer); %this is necessary except for filt
+                    plot(ax,pts.tPer,xPer,'bs')
+                    if doAllPts
+                        plot(ax,pts.tMin,pts.xMin,'r^')
+                        plot(ax,pts.tMax,pts.xMax,'rv')
+                        plot(ax,pts.tUp,pts.xUp,'bd')
+                        plot(ax,pts.tDown,pts.xDown,'bo')
+                    end
+                    hold off
+                end
+            end
+            
+            axis tight
+            xlabel('t')
+            ylabel('x')
+            YLIM=ylim();
+            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+            
+            hold on
+            for i=2:expt.nS
+                plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+            end
+            hold off
+            
+        end
+        
+        function plot_psd(expt,ax,tix)
+            hold off
+            for i=1:expt.nS
+                plot(ax,expt.f,expt.psd(:,tix,i)); 
+%                 plot(ax,expt.f,pow2db(expt.psd(:,tix,i)));
+                hold on
+            end
+            hold off
+            % set(gca,'yscale','log')
+%             fhi=find(
+%             title('One Sided Power Spectral Density');       
+            xlabel('frequency')         
+            ylabel('power');
+            axis tight
+            xlim([0,1])
+        end
+        
+        function plot_features(expt,ax,xname,yname,tix)
+            
+            xname=validatestring(xname,['t','segment',expt.fnames]);
+            yname=validatestring(yname,expt.fnames);
+            
+            
+            
+            switch xname
+                case {'t'}
+                    
+                case {'segment',''}
+                    
+                case expt.fnames
+                    
+                otherwise
+                    error(['Invalid name for x-axis: ' xname])
+            end
+            
+        end
+        
+        function traceKeypress(expt,src,event,whichPlot,showPts)
+            tix=src.UserData;
+            ax=gca;
+            switch(event.Key)
+                case {'leftarrow'}
+                    if tix>1
+                        tix=tix-1;
+                        expt.plot_t(ax,whichPlot,tix,showPts)
+                    end
+                case {'rightarrow'}
+                    if tix<expt.nX
+                        tix=tix+1;
+                        expt.plot_t(ax,whichPlot,tix,showPts)
+                    end
+            end
+            src.UserData=tix;
+        end
+        
+        function psdKeypress(expt,src,event)
+            tix=src.UserData;
+            ax=gca;
+            switch(event.Key)
+                case {'leftarrow'}
+                    if tix>1
+                        tix=tix-1;
+                        expt.plot_psd(ax,tix)
+                    end
+                case {'rightarrow'}
+                    if tix<expt.nX
+                        tix=tix+1;
+                        expt.plot_psd(ax,tix)
+                    end
+            end
+            src.UserData=tix;
+        end
     end
 
 end

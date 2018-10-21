@@ -56,7 +56,7 @@ DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1
 isUp=X(1,:)>thrUp;
 % isUp=X(1,:)>=thrUp | (X(1,:)<=thrUp&X(1,:)>=thrDown&DX(1,:)<0);
 
-points(nX)=struct('range',[],'thrUp',[],'thrDown',[],...
+points(nX)=struct('tPer',[],'xPer',[],'iPer',[],...
     'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
     'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[]);
 %     'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
@@ -116,12 +116,9 @@ end
 
 numUp=arrayfun(@(x) length(x.tUp),points);
 
-features=struct('period',[],'APD',[],'PF',[],'amp',[]);
+% features=struct('period',[],'APD',[],'PF',[],'amp',[]);
+features=struct();
 for i=1:nX
-    
-    points(i).range=globalXamp(i);
-    points(i).thrUp=thrUp(i);
-    points(i).thrDown=thrDown(i);
         
     if numel(points(i).tUp)>1
     
@@ -137,7 +134,15 @@ for i=1:nX
         points(i).xDown=points(i).xDown(1:end-1);
     end
     
+    points(i).iPer=points(i).iUp;
+    points(i).tPer=points(i).tUp;
+    points(i).xPer=points(i).xUp;
+    
     nT=length(points(i).tUp)-1;
+    
+    features(i).range=globalXamp(i);
+    features(i).thrUp=thrUp(i);
+    features(i).thrDown=thrDown(i);
     features(i).period=diff(points(i).tUp);
     features(i).APD=points(i).tDown-points(i).tUp(1:end-1); %active phase duration
     features(i).PF=features(i).APD./features(i).period;

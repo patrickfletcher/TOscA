@@ -48,7 +48,7 @@ end
 
 % hold off; plot(t,X); hold on
 
-points(nX)=struct('range',[],...
+points(nX)=struct('tPer',[],'xPer',[],'iPer',[],...
     'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
     'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[]);
 
@@ -96,7 +96,6 @@ end
 
 features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[]);
 for i=1:nX
-    points(i).range=globalXamp(i);
     
     if numel(points(i).tMin)>1
         
@@ -112,6 +111,11 @@ for i=1:nX
         points(i).xMax=points(i).xMax(1:end-1);
     end
     
+    points(i).iPer=points(i).iMin;
+    points(i).tPer=points(i).tMin;
+    points(i).xPer=points(i).xMin;
+    
+    features(i).range=globalXamp(i);
     features(i).period=diff(points(i).tMin); %period defined from minimum to minimum
     
     %simple method: baseline=average of successive minima
@@ -123,7 +127,7 @@ for i=1:nX
     %interp of times is needed for good visual
     %local linear detrend using two minima?
     nPer=length(features(i).period);
-    features(i).active=false(size(t)); %indicators for active/silent (for plotting)
+%     features(i).active=false(size(t)); %indicators for active/silent (for plotting)
     for j=1:nPer
         ix=points(i).iMin(j):points(i).iMin(j+1);
         tt=t(ix);

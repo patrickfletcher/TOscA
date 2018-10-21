@@ -123,7 +123,7 @@ end
         
     end
 
-    function keypressFcn(~,event)
+    function keypressFcn(src,event)
         switch(event.Key)
             case {'leftarrow'}
                 if tix>1
