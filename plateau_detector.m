@@ -58,9 +58,9 @@ isUp=X(1,:)>thrUp;
 
 points(nX)=struct('tPer',[],'xPer',[],'iPer',[],...
     'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
-    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[]);
-%     'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
-%     'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
+    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
+    'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
+    'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
 for i=2:length(t)
     
     %if strated up, then went below thrUp but not below thrDown, set isUp=0
@@ -116,7 +116,7 @@ end
 
 numUp=arrayfun(@(x) length(x.tUp),points);
 
-features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[]);
+features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[],'maxslope',[],'minslope',[]);
 features=struct();
 for i=1:nX
         
@@ -156,17 +156,18 @@ for i=1:nX
         points(i).tMin(j)=t(tt(imin));
         points(i).xMin(j)=xmin;
         
-%         [dxmax,idxmax]=max(DX(tt,i));
-%         points(i).iDXMax(j)=tt(1)+idxmax-1;
-%         points(i).tDXMax(j)=t(tt(idxmax));
-%         points(i).xDXMax(j)=X(tt(idxmax),i);
-%         points(i).dxMax(j)=dxmax;
-%         
-%         [dxmin,idxmin]=min(DX(tt,i));
-%         points(i).iDXMin(j)=tt(1)+idxmin-1;
-%         points(i).tDXMin(j)=t(tt(idxmin));
-%         points(i).xDXMin(j)=X(tt(idxmin),i);
-%         points(i).dxMin(j)=dxmin;
+        tt=points(i).iUp(j):points(i).iDown(j);
+        [dxmax,idxmax]=max(DX(tt,i));
+        points(i).iDXMax(j)=tt(1)+idxmax-1;
+        points(i).tDXMax(j)=t(tt(idxmax));
+        points(i).xDXMax(j)=X(tt(idxmax),i);
+        points(i).dxMax(j)=dxmax;
+        
+        [dxmin,idxmin]=min(DX(tt,i));
+        points(i).iDXMin(j)=tt(1)+idxmin-1;
+        points(i).tDXMin(j)=t(tt(idxmin));
+        points(i).xDXMin(j)=X(tt(idxmin),i);
+        points(i).dxMin(j)=dxmin;
     end
     
     features(i).baseline=points(i).xMin;
@@ -176,6 +177,8 @@ for i=1:nX
     features(i).thrUp=thrUp(i);
     features(i).thrDown=thrDown(i);
     features(i).pthresh=(thrUp(i)+thrDown(i))/2;
+    features(i).maxslope=points(i).dxMax;
+    features(i).minslope=points(i).dxMin;
     
     else
         %had less than two minima: can't compute features.
@@ -215,8 +218,8 @@ end
         plot(points(tix).tDown,points(tix).xDown,'bo','Tag','plateau_detector')
         plot(points(tix).tMax,points(tix).xMax,'rv','Tag','plateau_detector')
         plot(points(tix).tMin,points(tix).xMin,'r^','Tag','plateau_detector')
-%         plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
-%         plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
+        plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
+        plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
         plot(xlim(),thrUp(tix)*[1,1],'r--','Tag','plateau_detector')
         if thrUp~=thrDown
             plot(xlim(),thrDown(tix)*[1,1],'b--','Tag','plateau_detector')

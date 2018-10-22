@@ -47,10 +47,13 @@ if deltaIsFraction
 end
 
 % hold off; plot(t,X); hold on
+DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
 
 points(nX)=struct('tPer',[],'xPer',[],'iPer',[],...
     'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
-    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[]);
+    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
+    'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
+    'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
 
 % maxIsNext=zeros(1,nX); %look for a minimum first
 maxIsNext=ones(1,nX); %look for a maximum first
@@ -94,7 +97,7 @@ for i=2:length(t)
 %     plot(t(minix),lastMin,'^');
 end
 
-features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[]);
+features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[],'maxslope',[],'minslope',[]);
 for i=1:nX
     
     if numel(points(i).tMin)>1
@@ -161,12 +164,27 @@ for i=1:nX
         
         features(i).pthresh(j)=thr;
 %         features(i).active(ix(up))=1; %needs interpolation... handle multiple crossings
+
+
+        [dxmax,idxmax]=max(DX(ix,i));
+        points(i).iDXMax(j)=ix(1)+idxmax-1;
+        points(i).tDXMax(j)=t(ix(idxmax));
+        points(i).xDXMax(j)=X(ix(idxmax),i);
+        points(i).dxMax(j)=dxmax;
+        
+        [dxmin,idxmin]=min(DX(ix,i));
+        points(i).iDXMin(j)=ix(1)+idxmin-1;
+        points(i).tDXMin(j)=t(ix(idxmin));
+        points(i).xDXMin(j)=X(ix(idxmin),i);
+        points(i).dxMin(j)=dxmin;
     end
     
     features(i).APD=points(i).tDown-points(i).tUp;
     features(i).PF=features(i).APD./features(i).period;
    
     features(i).range=globalXamp(i);
+    features(i).maxslope=points(i).dxMax;
+    features(i).minslope=points(i).dxMin;
     else
         %had less than two minima: can't compute features.
         features(i).period=[];
@@ -238,8 +256,8 @@ end
         
         plot(points(tix).tMax,points(tix).xMax,'rv','Tag','plateau_detector')
         plot(points(tix).tMin,points(tix).xMin,'r^','Tag','plateau_detector')
-%         plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
-%         plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
+        plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
+        plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
 
         end
         xlabel('t')
