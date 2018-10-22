@@ -115,7 +115,6 @@ for i=1:nX
     points(i).tPer=points(i).tMin;
     points(i).xPer=points(i).xMin;
     
-    features(i).range=globalXamp(i);
     features(i).period=diff(points(i).tMin); %period defined from minimum to minimum
     
     %simple method: baseline=average of successive minima
@@ -167,14 +166,15 @@ for i=1:nX
     features(i).APD=points(i).tDown-points(i).tUp;
     features(i).PF=features(i).APD./features(i).period;
    
+    features(i).range=globalXamp(i);
     else
         %had less than two minima: can't compute features.
-        features(i).period=0;
-        features(i).baseline=0;
-        features(i).peaks=0;
-        features(i).amp=0;
-        features(i).APD=0;
-        features(i).PF=0;
+        features(i).period=[];
+        features(i).baseline=[];
+        features(i).peaks=[];
+        features(i).amp=[];
+        features(i).APD=[];
+        features(i).PF=[];
     end
 end
 

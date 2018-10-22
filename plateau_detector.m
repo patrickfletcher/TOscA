@@ -116,7 +116,7 @@ end
 
 numUp=arrayfun(@(x) length(x.tUp),points);
 
-% features=struct('period',[],'APD',[],'PF',[],'amp',[]);
+features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[]);
 features=struct();
 for i=1:nX
         
@@ -140,9 +140,6 @@ for i=1:nX
     
     nT=length(points(i).tUp)-1;
     
-    features(i).range=globalXamp(i);
-    features(i).thrUp=thrUp(i);
-    features(i).thrDown=thrDown(i);
     features(i).period=diff(points(i).tUp);
     features(i).APD=points(i).tDown-points(i).tUp(1:end-1); %active phase duration
     features(i).PF=features(i).APD./features(i).period;
@@ -172,16 +169,22 @@ for i=1:nX
 %         points(i).dxMin(j)=dxmin;
     end
     
+    features(i).baseline=points(i).xMin;
+    features(i).peaks=points(i).xMax;
     features(i).amp=points(i).xMax-points(i).xMin;
+    features(i).range=globalXamp(i);
+    features(i).thrUp=thrUp(i);
+    features(i).thrDown=thrDown(i);
+    features(i).pthresh=(thrUp(i)+thrDown(i))/2;
     
     else
         %had less than two minima: can't compute features.
-        features(i).period=0;
-        features(i).baseline=0;
-        features(i).peaks=0;
-        features(i).amp=0;
-        features(i).APD=0;
-        features(i).PF=0;
+        features(i).period=[];
+        features(i).baseline=[];
+        features(i).peaks=[];
+        features(i).amp=[];
+        features(i).APD=[];
+        features(i).PF=[];
     end
 end
 

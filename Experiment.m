@@ -6,7 +6,7 @@ classdef Experiment < handle
         name=''
         date=''
         sex=''
-        animalCondition='' %eg. WT vs KO
+        condition='' %eg. WT vs KO
         filename=''
         notes={}
         
@@ -61,6 +61,11 @@ classdef Experiment < handle
         
         interpMethod='linear'
         
+        thrFrac=[0.55,0.45]
+        delta=0.25
+        Tbig=15
+        Tsmall=4
+        
         %keep track of which trace is in focus for plotting - no, this should be a property of the figure
 %         tix=1;
     end
@@ -85,16 +90,33 @@ classdef Experiment < handle
             end
             
             %load a new file
-            header={};
             if loadFile
                 if isempty(fullfile) || ~exist(fullfile,'file')
                     [filename,path]=uigetfile({'*.xls*'});
                     fullfile=[path,filename];
                 end
                 
-                [data,header]=xlsread(fullfile);
+                [num,txt,raw]=xlsread(fullfile);
+                %extract data
+                ixs=find(cellfun(@(x)(isnumeric(x)&&~isnan(x)),raw(:,1)),1,'first');
+                data=cell2mat(raw(ixs:end,1:size(num,2)));
+                
+                %look for special metadata entries
+                headerNames=txt(:,1);
+                keyword={'name','date','sex','condition'};
+                for i=1:length(keyword)
+                    r=find(strcmpi(headerNames,keyword{i}));
+                    if ~isempty(r)
+                        expt.(keyword{i})=txt{r,2};
+                    end
+                end
+                
+                r=find(strcmpi(headerNames,'group'));
+                if ~isempty(r)
+                    expt.setGroup(cell2mat(raw(r,2:size(num,2))))
+                end
+                
                 expt.filename=fullfile;
-                expt.name=filename;
             end
             
             time=data(:,1);
@@ -156,8 +178,8 @@ classdef Experiment < handle
             expt.fs=1/expt.dt;
             
             %default segment = whole trace
-            expt.defineSegments({''},[ti(1),ti(end)]);
-
+            expt.defineSegments({'1'},[ti(1),ti(end)]);
+%             expt.setGroup(ones(1,expt.nX));
             expt.include=true(1,expt.nX);
         end
         
@@ -209,6 +231,20 @@ classdef Experiment < handle
             expt.trendParam=methodPar;
         end
         
+        function setGroup(expt,groupvar)
+            expt.group=groupvar;
+            expt.nG=unique(groupvar);
+        end
+        
+        function averageTraces(expt)
+            XDTg=zeros(length(expt.t),expt.nG);
+            for j=1:nI  
+                XDTg(:,j)=mean(XDTg(:,I==uI(j)),2);  
+            end
+            expt.Xg=XDTg;
+        end
+        
+        
         function filter(expt,method,methodPar,doPlot)
             if isempty(expt.Xnorm)
                 expt.Xnorm=expt.X;
@@ -227,50 +263,12 @@ classdef Experiment < handle
         
         
         %Analysis functions - per interval
-        function periodogram(expt)
-            for i=1:expt.nS
-                thisIx=expt.segment(i).ix;
-                [PSD,F,pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
-                Tpsd=1./fmax;
-                expt.psd(:,:,i)=PSD;
-                
-                for j=1:expt.nX
-                    expt.features{i}(j).Tpsd=Tpsd(j);
-                    expt.features{i}(j).fmax=fmax(j);
-                    expt.features{i}(j).Pmax=pmax(j);
-                end
-            end
-            expt.f=F;
+        function compute_features(expt,method,methodPar)
+            expt.detect_periods(method,methodPar);
+            expt.periodogram();
+            
+            expt.fnames=fieldnames(expt.features{1})';
         end
-        
-        function detect_periods(expt,method,methodPar)
-%             expt.points={};
-%             expt.features={};
-            for i=1:expt.nS
-                thisIx=expt.segment(i).ix;
-                tt=expt.t(thisIx);
-                xx=expt.Xfilt(thisIx,:);
-                switch method
-                    case {'peaks'}
-                        delta=methodPar;
-                        [pts,feats]=peak_detector(tt,xx,delta);
-
-                    case {'threshold'}
-                        frac=methodPar;
-                        [pts,feats]=plateau_detector(tt,xx,frac);
-                end
-                expt.points{i}=pts;
-                expt.features{i}=feats;
-                
-                %also get xvalues for all X types
-                %independently max/min per period for non-filt traces (detrend at least)
-                
-                %get average features per segment per trace
-                
-            end
-            expt.fnames=fieldnames(feats)';
-        end
-        
         
         function plotTrace(expt,ax,whichPlot,showPts,tix)
             %dispatch function for plotting expt data
@@ -302,9 +300,7 @@ classdef Experiment < handle
         
         function plotPeriodogram(expt,ax,tix)
             %overlay psd for each segment
-            if isempty(expt.psd)
-                expt.periodogram();
-            end
+            if ~isempty(expt.psd)
                        
             if isempty(ax)
                 ax=gca;
@@ -320,30 +316,126 @@ classdef Experiment < handle
             
             expt.plot_psd(ax,tix);
             
+            end
         end
         
-        function plotFeature(expt,ax,xname,yname,tix)
+        function plotFeatures(expt,ax,xname,yname,tix)
             %xname={t,segment,fnames}
             %yname={fnames}
+                
+            if ~isempty(expt.features)
+                
+            if isempty(ax)
+                ax=gca;
+            end
             
+            if isempty(xname)
+                xname='segment';
+            end
+            
+            xname=validatestring(xname,['t','segment',expt.fnames]);
+            yname=validatestring(yname,expt.fnames);
+            
+            if ~exist('tix','var')||isempty(tix)
+                tix=1;
+                figID=gcf; %newfig?
+                figID.KeyPressFcn={@expt.featureKeypress,xname,yname};
+                figID.UserData=tix; %store the current trace ID with figure
+                ax=gca;
+            end
+            
+            expt.plot_features(ax,xname,yname,tix);
+            
+            end
         end
         
     end
     
     methods (Access=private)
         
+        
+        function detect_periods(expt,method,methodPar)
+%             expt.points={};
+%             expt.features={};
+            for i=1:expt.nS
+                thisIx=expt.segment(i).ix;
+                tt=expt.t(thisIx);
+                xx=expt.Xfilt(thisIx,:);
+                switch method
+                    case {'peaks'}
+                        delta=methodPar;
+                        [pts,feats]=peak_detector(tt,xx,delta);
+
+                    case {'threshold'}
+                        frac=methodPar;
+                        [pts,feats]=plateau_detector(tt,xx,frac);
+                end
+                
+                %also get xvalues for all X types
+                %independently max/min per period for non-filt traces (detrend at least)
+                
+                %get average features per segment per trace
+                Tmean=arrayfun(@(x)mean(x.period),feats); Tmean=num2cell(Tmean);
+                Tstd=arrayfun(@(x)std(x.period),feats); Tstd=num2cell(Tstd);
+                APDmean=arrayfun(@(x)mean(x.APD),feats); APDmean=num2cell(APDmean);
+                APDstd=arrayfun(@(x)std(x.APD),feats); APDstd=num2cell(APDstd);
+                PFmean=arrayfun(@(x)mean(x.PF),feats); PFmean=num2cell(PFmean);
+                PFstd=arrayfun(@(x)std(x.PF),feats); PFstd=num2cell(PFstd);
+                Amean=arrayfun(@(x)mean(x.amp),feats); Amean=num2cell(Amean);
+                Astd=arrayfun(@(x)std(x.amp),feats); Astd=num2cell(Astd);
+                
+                [feats.Tmean]=Tmean{:};
+                [feats.Tstd]=Tstd{:};
+                [feats.APDmean]=APDmean{:};
+                [feats.APDstd]=APDstd{:};
+                [feats.PFmean]=PFmean{:};
+                [feats.PFstd]=PFstd{:};
+                [feats.Amean]=Amean{:};
+                [feats.Astd]=Astd{:};
+                
+                expt.points{i}=pts;
+                expt.features{i}=feats;
+            end
+%             expt.fnames=fieldnames(feats)';
+        end
+        
+        function periodogram(expt)
+            for i=1:expt.nS
+                thisIx=expt.segment(i).ix;
+                [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
+                Tpsd=1./fmax;
+                expt.psd(:,:,i)=PSD;
+                
+                Tpsd=num2cell(Tpsd);
+                fmax=num2cell(fmax);
+                Pmax=num2cell(Pmax);
+                [expt.features{i}.Tpsd]=Tpsd{:};
+                [expt.features{i}.fmax]=fmax{:};
+                [expt.features{i}.Pmax]=Pmax{:};
+            end
+            expt.f=F;
+%             expt.fnames=fieldnames(expt.features{i})'; 
+        end
+        
         function plot_t(expt,ax,whichPlot,tix,showPts)
             
+            axes(ax)
+            cla
+            hold(ax,'on');
+            
             doAllPts=false;
+            x2=[];
             switch whichPlot
                 case {'raw'}
                     x=expt.X(:,tix);
                     
                 case {'norm'}
                     x=expt.Xnorm(:,tix);
+                    x2=expt.Xtrend(:,tix);
                     
                 case {'detrend'}
                     x=expt.Xdetrend(:,tix);
+                    x2=expt.Xfilt(:,tix);
                     
                 case {'filt'}
                     x=expt.Xfilt(:,tix);
@@ -354,13 +446,18 @@ classdef Experiment < handle
             end
             
             plot(ax,expt.t,x,'k')
+            if ~isempty(x2)
+            plot(ax,expt.t,x2)
+            end
             
             if showPts
                 for i=1:expt.nS
                     tt=expt.t(expt.segment(i).ix);
                     xx=x(expt.segment(i).ix);
                     pts=expt.points{i}(tix);
-                    hold on
+                    
+                    if length(pts.tPer)>1
+                        
                     xPer=interp1(tt,xx,pts.tPer); %this is necessary except for filt
                     plot(ax,pts.tPer,xPer,'bs')
                     if doAllPts
@@ -368,59 +465,191 @@ classdef Experiment < handle
                         plot(ax,pts.tMax,pts.xMax,'rv')
                         plot(ax,pts.tUp,pts.xUp,'bd')
                         plot(ax,pts.tDown,pts.xDown,'bo')
+                        
+                        tupdwn=[pts.tUp(1:length(pts.tDown)); pts.tDown];
+                        ythresh=[1;1]*expt.features{i}(tix).pthresh;
+                        plot(ax,tupdwn,ythresh,'b-')
                     end
-                    hold off
+                    end
                 end
             end
             
             axis tight
             xlabel('t')
-            ylabel('x')
-            YLIM=ylim();
-            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+            ylabel(['X',whichPlot])
+            YLIM=ylim(ax);
+            ylim(ax,[YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
-            hold on
             for i=2:expt.nS
                 plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
             end
-            hold off
+            hold(ax,'off')
             
         end
         
         function plot_psd(expt,ax,tix)
-            hold off
+            
+            axes(ax)
+            cla
+            hold(ax,'on');
+            
             for i=1:expt.nS
                 plot(ax,expt.f,expt.psd(:,tix,i)); 
 %                 plot(ax,expt.f,pow2db(expt.psd(:,tix,i)));
-                hold on
             end
-            hold off
             % set(gca,'yscale','log')
 %             fhi=find(
 %             title('One Sided Power Spectral Density');       
             xlabel('frequency')         
             ylabel('power');
             axis tight
-            xlim([0,1])
+            xlim(ax,[0,0.5])
+            hold(ax,'off')
         end
         
         function plot_features(expt,ax,xname,yname,tix)
             
-            xname=validatestring(xname,['t','segment',expt.fnames]);
-            yname=validatestring(yname,expt.fnames);
+            axes(ax)
+            cla
+            hold(ax,'on');
             
             
+            %x,y - highlight point for scalar features
+            %xx,yy - distribution of features (either across all traces for scalar features, or distribution within a
+            %trace for feature distributions)
+            
+            xJitter=0.05;
+           
+            HX=[];HY=[];
+            XX={};YY={};
+            
+            
+            scalarFeatures=false;
+            colorBySegment=false;
+            for i=1:expt.nS
+                        
+                %TODO: more robust way? what if that particular trace had 1 or 0 periods detected
+                x=[];
+                y=expt.features{i}(tix).(yname);
+                if isempty(y)
+                    return
+                end
+                
+                switch xname
+                    case {'t'}
+                        xx=expt.points{i}(tix).tMax;
+                        if isscalar(y) %must be a distribution feature
+                            error('Only per-trace feature distributions may be plotted vs time')
+                        else
+                            yy=y;
+                        end
+                        
+                        
+                    case {'segment'}
+                        if isscalar(y) %plot all trace data as line seg, highlight point tix
+%                             xx=i+xJitter*randn(1,expt.nX);
+                            xx=i*ones(1,expt.nX);
+                            yy=[expt.features{i}.(yname)];
+                            scalarFeatures=true;
+                            HX(end+1,1)=i;
+                            HY=[HY;y(:)];
+                        else
+                            xx=i+xJitter*randn(1,length(y));
+                            yy=y;
+                        end
+                        
+
+                    case expt.fnames
+                        x=expt.features{i}(tix).(xname);
+                        
+                        if isscalar(x) %plot all trace data, highlight point tix
+                            if isscalar(y) %plot all trace data, highlight point tix
+                                xx=[expt.features{i}.(xname)];
+                                yy=[expt.features{i}.(yname)];
+                                scalarFeatures=true;
+                                HX=[HX;x(:)];
+                                HY=[HY;y(:)];
+                            else
+                                error('x and y feature type must match')
+                            end
+                        else
+                            if isscalar(y) %plot all trace data, highlight point tix
+                                error('x and y feature type must match')
+                            else
+                                xx=x;
+                                yy=y;
+                                colorBySegment=true;
+                            end
+                        end
+
+                    otherwise
+                        error(['Invalid name for x-axis: ' xname])
+                end
+                
+                XX=[XX;{xx}];
+                YY=[YY;{yy}];
+
+            end
+                            
+            if scalarFeatures
+                
+                XX=cell2mat(XX);
+                YY=cell2mat(YY);
+                
+                if expt.nS>1
+                    plot(ax,XX,YY,'k-')
+                    plot(ax,HX,HY,'k-','linewidth',1.5)
+                end
+                h2=plot(ax,XX',YY','o');
+                for i=1:expt.nS
+                    h4=plot(ax,HX(i),HY(i),'o');
+                    h4.Color=h2(i).Color;
+                    h4.MarkerFaceColor=h2(i).Color;
+                end
+                if expt.nS>1
+                    legend(h2,{expt.segment.name})
+                end
+            else
+                for i=1:expt.nS
+                    hl(i)=plot(ax,XX{i},YY{i},'o');
+                end
+                if colorBySegment
+                    legend(hl,{expt.segment.name})
+                else
+                    for i=1:expt.nS
+                        hl(i).Color='k';
+                    end
+                end
+            end
+            
+            axis tight
+            YLIM=ylim(ax);
+            ylim(ax,[YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             switch xname
-                case {'t'}
-                    
-                case {'segment',''}
-                    
-                case expt.fnames
-                    
-                otherwise
-                    error(['Invalid name for x-axis: ' xname])
+                    case {'t'}
+                        xlabel('t')
+                        for i=1:expt.nS
+                            hl(i).LineStyle='-';
+                        end
+                        
+                        for i=2:expt.nS
+                            plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                        end
+                        
+                    case {'segment'}
+                        xticks(ax,1:expt.nS)
+                        xticklabels(ax,{expt.segment.name})
+                        xlim(ax,[0.5,expt.nS+0.5])
+                        xlabel(ax,'segment')
+                        
+                    case expt.fnames
+                        xlabel(ax,xname)
             end
+            
+            ylabel(ax,yname)
+            
+            hold(ax,'off')
             
         end
         
@@ -455,6 +684,24 @@ classdef Experiment < handle
                     if tix<expt.nX
                         tix=tix+1;
                         expt.plot_psd(ax,tix)
+                    end
+            end
+            src.UserData=tix;
+        end
+        
+        function featureKeypress(expt,src,event,xname,yname)
+            tix=src.UserData;
+            ax=gca;
+            switch(event.Key)
+                case {'leftarrow'}
+                    if tix>1
+                        tix=tix-1;
+                        expt.plot_features(ax,xname,yname,tix);
+                    end
+                case {'rightarrow'}
+                    if tix<expt.nX
+                        tix=tix+1;
+                        expt.plot_features(ax,xname,yname,tix);
                     end
             end
             src.UserData=tix;
