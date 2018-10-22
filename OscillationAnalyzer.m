@@ -8,7 +8,15 @@ classdef OscillationAnalyzer<handle
         
         expt
         
-        featmethod='threshold'
+        normMethod='none'
+        normParam=[]
+        trendMethod='none'
+        trendParam=[]
+        trendPerSeg=false
+        filterMethod='none'
+        filterParam=[]
+        
+        featureMethod='threshold'
         thrFrac=[0.55,0.45]
         delta=0.25
         Tbig=15
@@ -43,22 +51,35 @@ classdef OscillationAnalyzer<handle
     
     %constructor
     methods
-        function app=OscillationAnalyzer(filename,condNames,condTimes)
+        function app=OscillationAnalyzer(filename,condNames,condTimes,params)
             %assume data is either filename, or data matrix [t,X], columns
             %are observations.
             
-            app.expt=Experiment(filename);
+            if isempty(filename)
+                app.expt=Experiment();
+            else
+                app.expt=Experiment(filename);
+            end
             
             app.expt.defineSegments(condNames,condTimes);
             
             app.buildGUI(); %set up display elements
             
-            app.processData();
             
-            app.xfeat='Tpsd';
-            app.yfeat='Tmean';
-%             app.xfeat='segment';
-%             app.yfeat=app.expt.fnames{1};
+            app.normMethod=params.norm.method;
+            app.normParam=params.norm.methodpar;
+            app.trendMethod=params.trend.method;
+            app.trendParam=params.trend.methodpar;
+            app.trendPerSeg=params.trend.perSegment;
+            app.filterMethod=params.filt.method;
+            app.filterParam=params.filt.methodpar;
+            app.featureMethod=params.feature.method;
+            app.delta=params.feature.delta;
+            app.thrFrac=params.feature.thrFrac;
+            app.xfeat=params.feature.x;
+            app.yfeat=params.feature.y;
+
+            app.processData();
             
             app.plotData(); %populate the axes
         end
@@ -70,14 +91,13 @@ classdef OscillationAnalyzer<handle
         
         function processData(app)
             
-            app.expt.normalize('devmean2',[],0)
+            app.expt.normalize(app.normMethod,app.normParam,0)
 
-            persegment=false;
-            app.expt.detrend('sgolay',app.Tbig,persegment,0)
+            app.expt.detrend(app.trendMethod,app.trendParam,app.trendPerSeg,0)
 
-            app.expt.filter('gaussian',app.Tsmall,0)
+            app.expt.filter(app.filterMethod,app.filterParam,0)
             
-            switch app.featmethod
+            switch app.featureMethod
                 case 'peaks'
                     app.expt.compute_features('peaks',app.delta);
                 case 'threshold'
@@ -107,12 +127,12 @@ classdef OscillationAnalyzer<handle
             app.hFig.Units='normalized';
             
             xl=0.075; yl=0.075; wl=0.5; hl=0.2; gl=0.025;
-            xr=0.65; wr=0.3; hr=0.3; gr=0.05;
+            xr=0.65; wr=0.3; hr=0.35; gr=0.05;
             app.axRaw=axes('Position',[xl,yl+3*(hl+gl),wl,hl]);
             app.axNorm=axes('Position',[xl,yl+2*(hl+gl),wl,hl]);
             app.axDT=axes('Position',[xl,yl+hl+gl,wl,hl]);
             app.axFilt=axes('Position',[xl,yl,wl,hl]);
-            app.axPSD=axes('Position',[xr,yl+hr+gr,wr,hr]);
+            app.axPSD=axes('Position',[xr,yl+hr+gr,wr,0.2]);
             app.axFeat=axes('Position',[xr,yl,wr,hr]);
             
             
@@ -171,6 +191,17 @@ classdef OscillationAnalyzer<handle
                     app.processData();
                     app.plotData();
                     
+                case {'f'}
+                    prompt = {'x feature:','y feature:'};
+                    title = 'Enter features to plot';
+                    dims = [1 35];
+                    definput = {app.xfeat,app.yfeat};
+                    answer = inputdlg(prompt,title,dims,definput);
+                    app.xfeat=answer{1};
+                    app.yfeat=answer{2};
+                    app.processData();
+                    app.plotData();
+                    
                 case {'l'}
                     app.loadData();
                     app.processData();
@@ -180,10 +211,14 @@ classdef OscillationAnalyzer<handle
                     disp('save placeholder')
                     
                 case '1'
-                    app.featmethod='peaks';
+                    app.featureMethod='peaks';
+                    app.processData();
+                    app.plotData();
                     
                 case '2'
-                    app.featmethod='threshold';
+                    app.featureMethod='threshold';
+                    app.processData();
+                    app.plotData();
                     
                     
             end
@@ -200,13 +235,15 @@ classdef OscillationAnalyzer<handle
         end
         
         %select and load an excel file to read data from
-        function loadData(app,filename)
+        function loadData(app)
             %allow header to contain parameters and metadata for the
             %experiment, eg. condition times, condition names, etc.
             
-            app.expt=Experiment(filename);
+            app.expt=Experiment();
             
-            app.hFig.Name=['Oscillation Analyzer - ',app.datafilename];
+            %TODO: propagate settings, force user input?
+            
+            app.hFig.Name=['Oscillation Analyzer - ',app.expt.name];
         end
         
         %save results/params: MAT + XLS? ask for save name

@@ -20,6 +20,12 @@ switch lower(method)
     case {'none'}
 %         XTrend=zeros
 
+    case {'linear'}
+        
+        for i=1:nX
+            XTrend(:,i)=polyval(polyfit(t,X(:,i),1),t);
+        end
+
     case {'poly','polynomial'}
         
         %methodparam=degree of polynomial
