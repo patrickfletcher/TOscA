@@ -504,6 +504,9 @@ classdef Experiment < handle
             ylabel('power');
             axis tight
             xlim(ax,[0,0.5])
+            if expt.nS>1
+                legend({expt.segment.name})
+            end
             hold(ax,'off')
         end
         
