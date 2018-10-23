@@ -100,7 +100,8 @@ end
 features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[],'maxslope',[],'minslope',[]);
 for i=1:nX
     
-    if numel(points(i).tMin)>1
+    nPer=length(features(i).tMin-1);
+    if nPer>=1
         
     %trim leading and trailing maxima
     if points(i).tMax(1)<points(i).tMin(1)
@@ -128,7 +129,6 @@ for i=1:nX
     %interpolate active phase threshold crossing per period
     %interp of times is needed for good visual
     %local linear detrend using two minima?
-    nPer=length(features(i).period);
 %     features(i).active=false(size(t)); %indicators for active/silent (for plotting)
     for j=1:nPer
         ix=points(i).iMin(j):points(i).iMin(j+1);
