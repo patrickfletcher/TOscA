@@ -17,6 +17,12 @@ classdef Experiment < handle
         nS
         
         %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
+        % this requires supporting different pipeline options for each
+        % observable and allows computation of new higher order features,
+        % such as phase relationship
+        % --> actually, will likely determine period markers using only one
+        % observable, then compute features relative to those markers in
+        % other traces?
         X
         Xnorm
         Xtrend
@@ -26,7 +32,6 @@ classdef Experiment < handle
         include %set element to zero to exclude a trace; X(:,include)
         nX
         
-        %don't want Expt to have to know
         %if saving undeclared struct doesn't work try cell array for each segment
         %maybe the detector functions could export struct definition when called with no inputs
         points={}
@@ -49,6 +54,7 @@ classdef Experiment < handle
 %         tOmit
 %         nOmit
 
+%support variable length parameter lists, eg. for name-value pairs
         normMethod='none'
         normParam=[]
         trendMethod='none'
@@ -58,6 +64,9 @@ classdef Experiment < handle
         
         averageMethod='arithmetic'
         averageParam=[]
+        
+        featureMethod='threshold'
+        featureParam={}
         
         interpMethod='linear'
         
@@ -263,11 +272,12 @@ classdef Experiment < handle
         
         
         %Analysis functions - per interval
-        function compute_features(expt,method,methodPar)
-            expt.detect_periods(method,methodPar);
+        function compute_features(expt,method,varargin)
+            expt.detect_periods(method,varargin{:});
             expt.periodogram();
-            
             expt.fnames=fieldnames(expt.features{1})';
+            expt.featureMethod=method;
+            expt.featureParam=varargin; %methodpar should be varargin?
         end
         
         function plotTrace(expt,ax,whichPlot,showPts,tix)
@@ -354,21 +364,24 @@ classdef Experiment < handle
     methods (Access=private)
         
         
-        function detect_periods(expt,method,methodPar)
+        function detect_periods(expt,method,varargin)
 %             expt.points={};
 %             expt.features={};
+            extras={};
             for i=1:expt.nS
                 thisIx=expt.segment(i).ix;
                 tt=expt.t(thisIx);
                 xx=expt.Xfilt(thisIx,:);
                 switch method
                     case {'peaks'}
-                        delta=methodPar;
-                        [pts,feats]=peak_detector(tt,xx,delta);
+                        delta=varargin{1};
+                        if length(varargin)>1, extras=varargin(2:end); end
+                        [pts,feats]=peak_detector(tt,xx,delta,extras{:});
 
                     case {'threshold'}
-                        frac=methodPar;
-                        [pts,feats]=plateau_detector(tt,xx,frac);
+                        frac=varargin{1};
+                        if length(varargin)>1, extras=varargin(2:end); end
+                        [pts,feats]=plateau_detector(tt,xx,frac,extras{:});
                 end
                 
                 %also get xvalues for all X types
@@ -419,8 +432,12 @@ classdef Experiment < handle
         
         function plot_t(expt,ax,whichPlot,tix,showPts)
             
+            %BUG: matlab errors when mousing over data. datatips?? super
+            %annoying
+            
             axes(ax)
-            cla
+            delete(findobj(ax,'tag','plot_t'))
+            cla(ax)
             hold(ax,'on');
             
             doAllPts=false;
@@ -445,9 +462,9 @@ classdef Experiment < handle
                     error([whichPlot, ' is not a supported trace to plot']);
             end
             
-            plot(ax,expt.t,x,'k')
+            plot(ax,expt.t,x,'k','tag','plot_t')
             if ~isempty(x2)
-            plot(ax,expt.t,x2)
+            plot(ax,expt.t,x2,'tag','plot_t')
             end
             
             if showPts
@@ -459,29 +476,31 @@ classdef Experiment < handle
                     if length(pts.tPer)>1
                         
                     xPer=interp1(tt,xx,pts.tPer); %this is necessary except for filt
-                    plot(ax,pts.tPer,xPer,'bs')
+                    plot(ax,pts.tPer,xPer,'bs','tag','plot_t')
                     if doAllPts
-                        plot(ax,pts.tMin,pts.xMin,'r^')
-                        plot(ax,pts.tMax,pts.xMax,'rv')
-                        plot(ax,pts.tUp,pts.xUp,'bd')
-                        plot(ax,pts.tDown,pts.xDown,'bo')
+                        plot(ax,pts.tMin,pts.xMin,'r^','tag','plot_t')
+                        plot(ax,pts.tMax,pts.xMax,'rv','tag','plot_t')
+                        plot(ax,pts.tDXMin,pts.xDXMin,'g<','tag','plot_t')
+                        plot(ax,pts.tDXMax,pts.xDXMax,'g>','tag','plot_t')
+                        plot(ax,pts.tUp,pts.xUp,'bd','tag','plot_t')
+                        plot(ax,pts.tDown,pts.xDown,'bo','tag','plot_t')
                         
                         tupdwn=[pts.tUp(1:length(pts.tDown)); pts.tDown];
                         ythresh=[1;1]*expt.features{i}(tix).pthresh;
-                        plot(ax,tupdwn,ythresh,'b-')
+                        plot(ax,tupdwn,ythresh,'b-','tag','plot_t')
                     end
                     end
                 end
             end
             
             axis tight
-            xlabel('t')
-            ylabel(['X',whichPlot])
+            xlabel(ax,'t')
+            ylabel(ax,['X',whichPlot])
             YLIM=ylim(ax);
             ylim(ax,[YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             for i=2:expt.nS
-                plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g','tag','plot_t')
             end
             hold(ax,'off')
             

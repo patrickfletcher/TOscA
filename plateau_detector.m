@@ -33,7 +33,7 @@ if isvector(X)
     X=X(:);
 end
     
-[thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
+[thrPtiles,fracUp,fracDown,minAmp,threshMethod,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
 
@@ -41,13 +41,43 @@ globalXmin=prctile(X,thrPtiles(1),1);
 globalXmax=prctile(X,thrPtiles(2),1);
 globalXamp=globalXmax-globalXmin;
 
+sufficientGlobalAmp=globalXamp>minAmp;
+
 %independent thresholds for each trace
-thrUp=globalXmin + fracUp*globalXamp;
-if fracDown>0
-    thrDown=globalXmin + fracDown*globalXamp;
-else
-    thrDown=thrUp;
+switch lower(threshMethod)
+    case 'fracamp'
+        %fraction of global amplitude method
+        thrUp=globalXmin + fracUp*globalXamp;
+        if fracDown>0
+            thrDown=globalXmin + fracDown*globalXamp;
+        else
+            thrDown=thrUp;
+        end
+        
+    case 'rawvals'
+        %specific raw values as thresholds
+        thrUp=fracUp;
+        thrDown=fracDown;
+        
+    case 'medfrac'
+        %median +/- fraction of amp
+        medX=median(X,1);
+        thrUp=medX + fracUp*globalXamp;
+        thrDown=medX - fracDown*globalXamp;
+        
+    case 'medraw'
+        %median +/- raw values
+        medX=median(X,1);
+        thrUp=medX + fracUp;
+        thrDown=medX - fracDown;
 end
+
+
+%TODO: other possibilities
+% central value +/- fraction of global amp (eg. median +/- 0.05*amp)
+
+%option for dimensional values as thresholds for above methods
+
 
 %TODO: make sure initialization of upstate toggle is robust
 DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
@@ -61,6 +91,7 @@ points(nX)=struct('tPer',[],'xPer',[],'iPer',[],...
     'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
     'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
     'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
+
 for i=2:length(t)
     
     %if strated up, then went below thrUp but not below thrDown, set isUp=0
@@ -68,8 +99,8 @@ for i=2:length(t)
 %     isUp(firstDown)=0;
     
     %check for downward-transition and upward-transition
-    isDownTransition=isUp&X(i,:)<=thrDown;
-    isUpTransition=~isUp&X(i,:)>=thrUp;
+    isDownTransition=isUp&X(i,:)<=thrDown & sufficientGlobalAmp;
+    isUpTransition=~isUp&X(i,:)>=thrUp & sufficientGlobalAmp;
     
     if any(isDownTransition)
         idx=find(isDownTransition);
@@ -156,18 +187,20 @@ for i=1:nX
         points(i).tMin(j)=t(tt(imin));
         points(i).xMin(j)=xmin;
         
+        %compute min slope anywhere in the period
+        [dxmin,idxmin]=min(DX(tt,i));
+        points(i).iDXMin(j)=tt(1)+idxmin-1;
+        points(i).tDXMin(j)=t(tt(idxmin));
+        points(i).xDXMin(j)=X(tt(idxmin),i);
+        points(i).dxMin(j)=dxmin;
+        
+        %compute maxslope only in the active phase? 
         tt=points(i).iUp(j):points(i).iDown(j);
         [dxmax,idxmax]=max(DX(tt,i));
         points(i).iDXMax(j)=tt(1)+idxmax-1;
         points(i).tDXMax(j)=t(tt(idxmax));
         points(i).xDXMax(j)=X(tt(idxmax),i);
         points(i).dxMax(j)=dxmax;
-        
-        [dxmin,idxmin]=min(DX(tt,i));
-        points(i).iDXMin(j)=tt(1)+idxmin-1;
-        points(i).tDXMin(j)=t(tt(idxmin));
-        points(i).xDXMin(j)=X(tt(idxmin),i);
-        points(i).dxMin(j)=dxmin;
     end
     
     features(i).baseline=points(i).xMin;
@@ -248,11 +281,13 @@ end
 
 end
 
-function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
+function [thrPtiles,fracUp,fracDown,minAmp,threshMethod,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
 
     %default parameters
     defaultF=[0.5,0.4]; %near halfmax
-    thrPtiles=[0,100];
+    defaultthrPtiles=[0,100];
+    defaultminAmp=0;
+    defaultThresholdMethod='medfrac';
     doInterp=true;
     doPlot=false;
     doKeypress=true;
@@ -264,7 +299,9 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(
     addRequired(p,'t',@(x) isreal(x));
     addRequired(p,'X',validX);
     addOptional(p,'f',defaultF);  %somehow adding the validation function here messes things up
-    addParameter(p,'ThresholdPercentiles',thrPtiles,@(x) isreal(x) && numel(x)==2);
+    addParameter(p,'ThresholdPercentiles',defaultthrPtiles,@(x) isreal(x) && numel(x)==2);
+    addParameter(p,'MinimumAmplitude',defaultminAmp,@isreal);
+    addParameter(p,'ThresholdMethod',defaultThresholdMethod);
     addParameter(p,'Interpolate',doInterp,validSwitch);
     addParameter(p,'Plot',doPlot,validSwitch);
     addParameter(p,'Keypress',doKeypress,validSwitch);
@@ -274,6 +311,8 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(
     
     f=p.Results.f;
     thrPtiles=p.Results.ThresholdPercentiles;
+    minAmp=p.Results.MinimumAmplitude;
+    threshMethod=p.Results.ThresholdMethod;
     doInterp=p.Results.Interpolate;
     doPlot=p.Results.Plot;
     figID=p.Results.FigureID;
@@ -289,9 +328,9 @@ function [thrPtiles,fracUp,fracDown,doInterp,doPlot,figID,dokeypress]=parseArgs(
         error('Invalid value for fractional threshold')
     end
     
-    %snap to fracUp?
-    if fracDown>fracUp
-        fracDown=fracUp;
-    end
+%     %snap to fracUp?
+%     if fracDown>fracUp
+%         fracDown=fracUp;
+%     end
     
 end

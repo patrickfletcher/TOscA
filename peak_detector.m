@@ -31,7 +31,7 @@ if isvector(X)
     X=X(:);
 end
 
-[delta,platThresh,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
+[delta,platThresh,minAmp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
 dt=t(2)-t(1); %TODO: plateau features assume DT is constant!
@@ -40,6 +40,8 @@ thrPtiles=[0,100];
 globalXmin=prctile(X,thrPtiles(1),1);
 globalXmax=prctile(X,thrPtiles(2),1);
 globalXamp=globalXmax-globalXmin;
+
+sufficientGlobalAmp=globalXamp>minAmp;
 
 deltaIsFraction=true;
 if deltaIsFraction
@@ -69,7 +71,9 @@ for i=2:length(t)
     [lastMin,minrow]=min([this;lastMin],[],1);
     minix(minrow==1)=i;
     
-    maxFound=maxIsNext & this<lastMax-delta;
+    maxFound=maxIsNext & this<lastMax-delta & sufficientGlobalAmp;
+    minFound=~maxIsNext & this>lastMin+delta & sufficientGlobalAmp;
+    
     idx=find(maxFound); %for each trace with max found, store the point
     for j=idx
         points(j).iMax(end+1)=maxix(j);
@@ -81,7 +85,6 @@ for i=2:length(t)
 %         plot(points(j).tMax(end),points(j).xMax(end),'v');
     end
     
-    minFound=~maxIsNext & this>lastMin+delta;
     idx=find(minFound);
     for j=idx
         points(j).iMin(end+1)=minix(j);
@@ -100,7 +103,7 @@ end
 features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[],'maxslope',[],'minslope',[]);
 for i=1:nX
     
-    nPer=length(features(i).tMin-1);
+    nPer=length(points(i).tMin)-1;
     if nPer>=1
         
     %trim leading and trailing maxima
@@ -284,11 +287,12 @@ end
 
 end
 
-function [delta,platThresh,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
+function [delta,platThresh,minAmp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
 
     %default parameters
     defaultDelta=0.35;
     defaultPlatThresh=0.5;
+    defaultminAmp=0;
     
     doPlot=false;
     doKeypress=true;
@@ -301,6 +305,7 @@ function [delta,platThresh,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
     addRequired(p,'X',validX);
     addOptional(p,'delta',defaultDelta);
     addOptional(p,'platThresh',defaultPlatThresh);
+    addParameter(p,'MinimumAmplitude',defaultminAmp,@isreal);
     addParameter(p,'Plot',doPlot,validSwitch);
     addParameter(p,'Keypress',doKeypress,validSwitch);
     addParameter(p,'FigureID',figID);
@@ -309,6 +314,7 @@ function [delta,platThresh,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
     
     delta=p.Results.delta;
     platThresh=p.Results.platThresh;
+    minAmp=p.Results.MinimumAmplitude;
     doPlot=p.Results.Plot;
     dokeypress=p.Results.Keypress;
     figID=p.Results.FigureID;

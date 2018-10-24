@@ -188,6 +188,8 @@ classdef OscillationAnalyzer<handle
                     answer = inputdlg(prompt,title,dims,definput);
                     app.Tbig=str2double(answer{1});
                     app.Tsmall=str2double(answer{2});
+                    app.trendParam=app.Tbig; %switch for when "lowpass/highpass" is used?
+                    app.filterParam=app.Tsmall;
                     app.processData();
                     app.plotData();
                     
