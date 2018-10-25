@@ -45,7 +45,16 @@ classdef OscillationAnalyzer<handle
         boldLineWidth=1.5
         
         %uicontrols
+        check_include
         
+        edit_group
+        
+        select_norm
+        select_detrend
+        select_filter
+        
+        select_xfeat
+        select_yfeat
         
     end
     
@@ -121,10 +130,8 @@ classdef OscillationAnalyzer<handle
         function buildGUI(app)
             app.hFig=figure('Name',['Oscillation Analyzer - ',app.expt.name],'NumberTitle','off');
             app.hFig.KeyPressFcn=@app.keyPressDecoder;
-            pos=get(groot,'screensize');
-            pos=[50,50,pos(3:4)-150];
-            app.hFig.Position=pos;
             app.hFig.Units='normalized';
+            app.hFig.Position=[0.05,0.1,0.9,0.8];
             
             xl=0.075; yl=0.075; wl=0.5; hl=0.2; gl=0.025;
             xr=0.65; wr=0.3; hr=0.35; gr=0.05;
@@ -135,7 +142,9 @@ classdef OscillationAnalyzer<handle
             app.axPSD=axes('Position',[xr,yl+hr+gr,wr,0.2]);
             app.axFeat=axes('Position',[xr,yl,wr,hr]);
             
-            
+            app.check_include=uicontrol('Style','checkbox','units','normalized',...
+                'Position',[xr,yl+2*(hr+gr),wr/2,0.05],...
+                'String','include','Value',true,'Callback',@app.toggle_include);
             
         end
         
@@ -224,6 +233,11 @@ classdef OscillationAnalyzer<handle
                     
                     
             end
+        end
+        
+        function toggle_include(app,src,event)
+            newval=src.Value;
+            app.expt.include(app.tix)=newval; %TODO: use setter?
         end
         
     end

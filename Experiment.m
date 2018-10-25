@@ -527,7 +527,7 @@ classdef Experiment < handle
             xlabel('frequency')         
             ylabel('power');
             axis tight
-            xlim(ax,[0,0.5])
+%             xlim(ax,[0,0.5])
             if expt.nS>1
                 legend({expt.segment.name})
             end
