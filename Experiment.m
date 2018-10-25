@@ -2,6 +2,10 @@ classdef Experiment < handle
     %class to represent a single experiment containing >=1 timeseries that share the same time sample points. For
     %example, a fluorescence videomicroscopy experiment with multiple ROIs in a field of view. 
 
+    %TODO: plotting efficiently - plot all timeseries onces, and use an
+    %update function to set the visibility on/off (also would support
+    %option to plot out-of-focus traces as light gray)
+    
     properties
         name=''
         date=''
@@ -415,7 +419,8 @@ classdef Experiment < handle
         function periodogram(expt)
             for i=1:expt.nS
                 thisIx=expt.segment(i).ix;
-                [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
+                [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xdetrend(thisIx,:),expt.fs);
+%                 [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
                 Tpsd=1./fmax;
                 expt.psd(:,:,i)=PSD;
                 
@@ -619,9 +624,10 @@ classdef Experiment < handle
                 YY=cell2mat(YY);
                 
                 if expt.nS>1
-                    plot(ax,XX,YY,'k-')
+                    plot(ax,XX,YY,'-','color',[0.5,0.5,0.5])
                     plot(ax,HX,HY,'k-','linewidth',1.5)
                 end
+                
                 h2=plot(ax,XX',YY','o');
                 for i=1:expt.nS
                     h4=plot(ax,HX(i),HY(i),'o');
