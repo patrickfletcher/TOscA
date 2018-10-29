@@ -86,16 +86,16 @@ DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1
 isUp=X(1,:)>thrUp;
 % isUp=X(1,:)>=thrUp | (X(1,:)<=thrUp&X(1,:)>=thrDown&DX(1,:)<0);
 
-points(nX)=struct('tPer',[],'xPer',[],'iPer',[],...
-    'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
-    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
-    'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
-    'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
+pt=struct('ix',[],'t',[],'x',[],'dx',[]);
+
+points=repmat(struct('period',pt,'up',pt,'down',pt,...
+    'max',pt,'min',pt,'dxmax',pt,'dxmin',pt),1,nX);
+
 
 for i=2:length(t)
     
     %if strated up, then went below thrUp but not below thrDown, set isUp=0
-%     firstDown=isUp & X(i,:)<thrUp & arrayfun(@(x)isempty(x.iUp),points);
+%     firstDown=isUp & X(i,:)<thrUp & arrayfun(@(x)isempty(x.up.ix),points);
 %     isUp(firstDown)=0;
     
     %check for downward-transition and upward-transition
@@ -106,7 +106,7 @@ for i=2:length(t)
         idx=find(isDownTransition);
         for j=idx
             %index
-            points(j).iDown(end+1)=i;
+            points(j).down.ix(end+1)=i;
             
             if doInterp
                 %interpolate t
@@ -117,8 +117,8 @@ for i=2:length(t)
                 thisX=X(i,j);
             end
             
-            points(j).tDown(end+1)=thisT;
-            points(j).xDown(end+1)=thisX;
+            points(j).down.t(end+1)=thisT;
+            points(j).down.x(end+1)=thisX;
         end
         isUp(isDownTransition)=0;
     end
@@ -126,7 +126,7 @@ for i=2:length(t)
     if any(isUpTransition)
         idx=find(isUpTransition);
         for j=idx
-            points(j).iUp(end+1)=i;
+            points(j).up.ix(end+1)=i;
             
             if doInterp
                 %interpolate t
@@ -137,81 +137,81 @@ for i=2:length(t)
                 thisX=X(i,j);
             end
             
-            points(j).tUp(end+1)=thisT;
-            points(j).xUp(end+1)=thisX;
+            points(j).up.t(end+1)=thisT;
+            points(j).up.x(end+1)=thisX;
         end
         isUp(isUpTransition)=1;
     end
     
 end
 
-numUp=arrayfun(@(x) length(x.tUp),points);
+numUp=arrayfun(@(x) length(x.up.t),points);
 
 features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[],'maxslope',[],'minslope',[]);
 features=struct();
 for i=1:nX
         
-    if numel(points(i).tUp)>1
+    if numel(points(i).up.t)>1
     
 %     trim
-    if points(i).tDown(1)<=points(i).tUp(1)
-        points(i).iDown=points(i).iDown(2:end);
-        points(i).tDown=points(i).tDown(2:end);
-        points(i).xDown=points(i).xDown(2:end);
+    if points(i).down.t(1)<=points(i).up.t(1)
+        points(i).down.ix=points(i).down.ix(2:end);
+        points(i).down.t=points(i).down.t(2:end);
+        points(i).down.x=points(i).down.x(2:end);
     end
-    if points(i).tDown(end)>=points(i).tUp(end)
-        points(i).iDown=points(i).iDown(1:end-1);
-        points(i).tDown=points(i).tDown(1:end-1);
-        points(i).xDown=points(i).xDown(1:end-1);
+    if points(i).down.t(end)>=points(i).up.t(end)
+        points(i).down.ix=points(i).down.ix(1:end-1);
+        points(i).down.t=points(i).down.t(1:end-1);
+        points(i).down.x=points(i).down.x(1:end-1);
     end
     
-    points(i).iPer=points(i).iUp;
-    points(i).tPer=points(i).tUp;
-    points(i).xPer=points(i).xUp;
+    points(i).period.ix=points(i).up.ix;
+    points(i).period.t=points(i).up.t;
+    points(i).period.x=points(i).up.x;
     
-    nT=length(points(i).tUp)-1;
+    nT=length(points(i).up.t)-1;
     
-    features(i).period=diff(points(i).tUp);
-    features(i).APD=points(i).tDown-points(i).tUp(1:end-1); %active phase duration
+    features(i).period=diff(points(i).up.t);
+    features(i).APD=points(i).down.t-points(i).up.t(1:end-1); %active phase duration
     features(i).PF=features(i).APD./features(i).period;
     
     for j=1:nT
-        tt=points(i).iUp(j):points(i).iUp(j+1)-1;
+        tt=points(i).up.ix(j):points(i).up.ix(j+1)-1;
         [xmax,imax]=max(X(tt,i));
-        points(i).iMax(j)=tt(1)+imax-1;
-        points(i).tMax(j)=t(tt(imax));
-        points(i).xMax(j)=xmax;
+        points(i).max.ix(j)=tt(1)+imax-1;
+        points(i).max.t(j)=t(tt(imax));
+        points(i).max.x(j)=xmax;
         
         [xmin,imin]=min(X(tt,i));
-        points(i).iMin(j)=tt(1)+imin-1;
-        points(i).tMin(j)=t(tt(imin));
-        points(i).xMin(j)=xmin;
+        points(i).min.ix(j)=tt(1)+imin-1;
+        points(i).min.t(j)=t(tt(imin));
+        points(i).min.x(j)=xmin;
         
         %compute min slope anywhere in the period
         [dxmin,idxmin]=min(DX(tt,i));
-        points(i).iDXMin(j)=tt(1)+idxmin-1;
-        points(i).tDXMin(j)=t(tt(idxmin));
-        points(i).xDXMin(j)=X(tt(idxmin),i);
-        points(i).dxMin(j)=dxmin;
+        points(i).dxmin.ix(j)=tt(1)+idxmin-1;
+        points(i).dxmin.t(j)=t(tt(idxmin));
+        points(i).dxmin.x(j)=X(tt(idxmin),i);
+        points(i).dxmin.dx(j)=dxmin;
         
         %compute maxslope only in the active phase? 
-        tt=points(i).iUp(j):points(i).iDown(j);
+        tt=points(i).up.ix(j):points(i).down.ix(j);
         [dxmax,idxmax]=max(DX(tt,i));
-        points(i).iDXMax(j)=tt(1)+idxmax-1;
-        points(i).tDXMax(j)=t(tt(idxmax));
-        points(i).xDXMax(j)=X(tt(idxmax),i);
-        points(i).dxMax(j)=dxmax;
+        points(i).dxmax.ix(j)=tt(1)+idxmax-1;
+        points(i).dxmax.t(j)=t(tt(idxmax));
+        points(i).dxmax.x(j)=X(tt(idxmax),i);
+        points(i).dxmax.dx(j)=dxmax;
     end
     
-    features(i).baseline=points(i).xMin;
-    features(i).peaks=points(i).xMax;
-    features(i).amp=points(i).xMax-points(i).xMin;
+    features(i).baseline=points(i).min.x;
+    features(i).peaks=points(i).max.x;
+    features(i).amp=points(i).max.x-points(i).min.x;
     features(i).range=globalXamp(i);
     features(i).thrUp=thrUp(i);
     features(i).thrDown=thrDown(i);
     features(i).pthresh=(thrUp(i)+thrDown(i))/2;
-    features(i).maxslope=points(i).dxMax;
-    features(i).minslope=points(i).dxMin;
+    features(i).maxslope=points(i).dxmax.dx;
+    features(i).minslope=points(i).dxmin.dx;
     
     else
         %had less than two minima: can't compute features.
@@ -247,12 +247,12 @@ end
         plot(t,X(:,tix),'k-','Tag','plateau_detector')
         axis tight
         hold on
-        plot(points(tix).tUp,points(tix).xUp,'bs','Tag','plateau_detector')
-        plot(points(tix).tDown,points(tix).xDown,'bo','Tag','plateau_detector')
-        plot(points(tix).tMax,points(tix).xMax,'rv','Tag','plateau_detector')
-        plot(points(tix).tMin,points(tix).xMin,'r^','Tag','plateau_detector')
-        plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
-        plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
+        plot(points(tix).up.t,points(tix).up.x,'bs','Tag','plateau_detector')
+        plot(points(tix).down.t,points(tix).down.x,'bo','Tag','plateau_detector')
+        plot(points(tix).max.t,points(tix).max.x,'rv','Tag','plateau_detector')
+        plot(points(tix).min.t,points(tix).min.x,'r^','Tag','plateau_detector')
+        plot(points(tix).dxmax.t,points(tix).dxmax.x,'g>','Tag','plateau_detector')
+        plot(points(tix).dxmin.t,points(tix).dxmin.x,'g<','Tag','plateau_detector')
         plot(xlim(),thrUp(tix)*[1,1],'r--','Tag','plateau_detector')
         if thrUp~=thrDown
             plot(xlim(),thrDown(tix)*[1,1],'b--','Tag','plateau_detector')

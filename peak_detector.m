@@ -51,14 +51,12 @@ end
 % hold off; plot(t,X); hold on
 DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
 
-points(nX)=struct('tPer',[],'xPer',[],'iPer',[],...
-    'tUp',[],'xUp',[],'iUp',[],'tDown',[],'xDown',[],'iDown',[],...
-    'tMax',[],'xMax',[],'iMax',[],'tMin',[],'xMin',[],'iMin',[],...
-    'tDXMax',[],'xDXMax',[],'dxMax',[],'iDXMax',[],...
-    'tDXMin',[],'xDXMin',[],'dxMin',[],'iDXMin',[]);
+pt=struct('ix',[],'t',[],'x',[],'dx',[]);
 
-% maxIsNext=zeros(1,nX); %look for a minimum first
-maxIsNext=ones(1,nX); %look for a maximum first
+points=repmat(struct('period',pt,'up',pt,'down',pt,...
+    'max',pt,'min',pt,'dxmax',pt,'dxmin',pt),1,nX);
+% maxIsNext=zeros(1,nX); %look for a minimum first (often calls first point
+maxIsNext=ones(1,nX); %look for a maximum first (most reliable, but appears to miss some cases)
 
 lastMax=X(1,:); %initialize first point
 lastMin=X(1,:);
@@ -76,57 +74,58 @@ for i=2:length(t)
     
     idx=find(maxFound); %for each trace with max found, store the point
     for j=idx
-        points(j).iMax(end+1)=maxix(j);
-        points(j).tMax(end+1)=t(maxix(j));
-        points(j).xMax(end+1)=lastMax(j);
+        points(j).max.ix(end+1)=maxix(j);
+        points(j).max.t(end+1)=t(maxix(j));
+        points(j).max.x(end+1)=lastMax(j);
         lastMin(maxFound)=this(maxFound);
         minix(maxFound)=i;
         maxIsNext(maxFound)=false;
-%         plot(points(j).tMax(end),points(j).xMax(end),'v');
+%         plot(points(j).max.t(end),points(j).max.x(end),'v');
     end
     
     idx=find(minFound);
     for j=idx
-        points(j).iMin(end+1)=minix(j);
-        points(j).tMin(end+1)=t(minix(j));
-        points(j).xMin(end+1)=lastMin(j);
+        points(j).min.ix(end+1)=minix(j);
+        points(j).min.t(end+1)=t(minix(j));
+        points(j).min.x(end+1)=lastMin(j);
         lastMax(minFound)=this(minFound);
         maxix(minFound)=i;
         maxIsNext(minFound)=true;
-%         plot(points(j).tMin(end),points(j).xMin(end),'^');
+%         plot(points(j).min.t(end),points(j).min.x(end),'^');
     end
     
 %     plot(t(maxix),lastMax,'v');
 %     plot(t(minix),lastMin,'^');
 end
 
+
 features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[],'maxslope',[],'minslope',[]);
 for i=1:nX
-    
-    nPer=length(points(i).tMin)-1;
-    if nPer>=1
         
     %trim leading and trailing maxima
-    if points(i).tMax(1)<points(i).tMin(1)
-        points(i).iMax=points(i).iMax(2:end);
-        points(i).tMax=points(i).tMax(2:end);
-        points(i).xMax=points(i).xMax(2:end);
+    if  points(i).max.t(1)<points(i).min.t(1)
+        points(i).max.ix=points(i).max.ix(2:end);
+        points(i).max.t=points(i).max.t(2:end);
+        points(i).max.x=points(i).max.x(2:end);
     end
-    if points(i).tMax(end)>points(i).tMin(end)
-        points(i).iMax=points(i).iMax(1:end-1);
-        points(i).tMax=points(i).tMax(1:end-1);
-        points(i).xMax=points(i).xMax(1:end-1);
+    if points(i).max.t(end)>points(i).min.t(end)
+        points(i).max.ix=points(i).max.ix(1:end-1);
+        points(i).max.t=points(i).max.t(1:end-1);
+        points(i).max.x=points(i).max.x(1:end-1);
     end
     
-    points(i).iPer=points(i).iMin;
-    points(i).tPer=points(i).tMin;
-    points(i).xPer=points(i).xMin;
+    points(i).period.ix=points(i).min.ix;
+    points(i).period.t=points(i).min.t;
+    points(i).period.x=points(i).min.x;
+    nPer=length(points(i).period.t)-1;
+
+    if nPer>=1
     
-    features(i).period=diff(points(i).tMin); %period defined from minimum to minimum
+    features(i).period=diff(points(i).period.t); %period defined from minimum to minimum
     
     %simple method: baseline=average of successive minima
-    features(i).baseline=0.5*(points(i).xMin(1:end-1)+points(i).xMin(2:end));
-    features(i).peaks=points(i).xMax;
+    features(i).baseline=0.5*(points(i).min.x(1:end-1)+points(i).min.x(2:end));
+    features(i).peaks=points(i).max.x;
     features(i).amp=features(i).peaks-features(i).baseline;
     
     %interpolate active phase threshold crossing per period
@@ -134,9 +133,10 @@ for i=1:nX
     %local linear detrend using two minima?
 %     features(i).active=false(size(t)); %indicators for active/silent (for plotting)
     for j=1:nPer
-        ix=points(i).iMin(j):points(i).iMin(j+1);
+        ix=points(i).min.ix(j):points(i).min.ix(j+1);
         tt=t(ix);
         xx=X(ix,i);
+        dx=DX(ix,i);
         
         thr=features(i).baseline(j)+platThresh*features(i).amp(j);
         up=xx>=thr;
@@ -152,42 +152,43 @@ for i=1:nX
 %         tup=interp1(X(ix(iup-1:iup)),t(ix(iup-1:iup)),thr);
 %         tdwn=interp1(X(ix(idwn:idwn+1)),t(ix(idwn:idwn+1)),thr);
         
+        %direct linear interpolation
         tup=(thr-X(ix(iup)-1,i))*(t(ix(iup))-t(ix(iup)-1))/(X(ix(iup),i)-X(ix(iup)-1,i))+t(ix(iup)-1);
         tdwn=(thr-X(ix(idwn),i))/(X(ix(idwn)+1,i)-X(ix(idwn),i))*(t(ix(idwn)+1)-t(ix(idwn)))+t(ix(idwn));
 
 %         tup=(thr-xx(iup-1))*(tt(iup)-tt(iup-1))/(xx(iup)-xx(iup-1))+tt(iup-1);
 %         tdwn=(thr-xx(idwn))*(tt(idwn+1)-tt(idwn))/(xx(idwn+1)-xx(idwn))+tt(idwn);
                 
-        points(i).iUp(j)=iup;
-        points(i).tUp(j)=tup;
-        points(i).xUp(j)=thr;
-        points(i).iDown(j)=idwn;
-        points(i).tDown(j)=tdwn;
-        points(i).xDown(j)=thr;
+        points(i).up.ix(j)=iup;
+        points(i).up.t(j)=tup;
+        points(i).up.x(j)=thr;
+        points(i).down.ix(j)=idwn;
+        points(i).down.t(j)=tdwn;
+        points(i).down.x(j)=thr;
         
         features(i).pthresh(j)=thr;
 %         features(i).active(ix(up))=1; %needs interpolation... handle multiple crossings
 
 
-        [dxmax,idxmax]=max(DX(ix,i));
-        points(i).iDXMax(j)=ix(1)+idxmax-1;
-        points(i).tDXMax(j)=t(ix(idxmax));
-        points(i).xDXMax(j)=X(ix(idxmax),i);
-        points(i).dxMax(j)=dxmax;
+        [dxmax,idxmax]=max(dx);
+        points(i).dxmax.ix(j)=ix(1)+idxmax-1;
+        points(i).dxmax.t(j)=t(ix(idxmax));
+        points(i).dxmax.x(j)=X(ix(idxmax),i);
+        points(i).dxmax.dx(j)=dxmax;
         
-        [dxmin,idxmin]=min(DX(ix,i));
-        points(i).iDXMin(j)=ix(1)+idxmin-1;
-        points(i).tDXMin(j)=t(ix(idxmin));
-        points(i).xDXMin(j)=X(ix(idxmin),i);
-        points(i).dxMin(j)=dxmin;
+        [dxmin,idxmin]=min(dx);
+        points(i).dxmin.ix(j)=ix(1)+idxmin-1;
+        points(i).dxmin.t(j)=t(ix(idxmin));
+        points(i).dxmin.x(j)=X(ix(idxmin),i);
+        points(i).dxmin.dx(j)=dxmin;
     end
     
-    features(i).APD=points(i).tDown-points(i).tUp;
+    features(i).APD=points(i).down.t-points(i).up.t;
     features(i).PF=features(i).APD./features(i).period;
    
     features(i).range=globalXamp(i);
-    features(i).maxslope=points(i).dxMax;
-    features(i).minslope=points(i).dxMin;
+    features(i).maxslope=points(i).dxmax.dx;
+    features(i).minslope=points(i).dxmin.dx;
     else
         %had less than two minima: can't compute features.
         features(i).period=[];
@@ -227,15 +228,15 @@ end
         axis tight
         hold on
         
-        if length(points(tix).tMin)>1
+        if length(points(tix).min.t)>1
 
-        tupdwn=[points(tix).tUp; points(tix).tDown];
+        tupdwn=[points(tix).up.t; points(tix).down.t];
         ythresh=[1;1]*features(tix).pthresh;
         plot(tupdwn,ythresh,'r-','Tag','plateau_detector')
         
-        tper=[points(tix).tMin(1:end-1);points(tix).tMin(2:end)];
-        ybase=[1;1]*features(tix).baseline;
-        plot(tper,ybase,'b-','Tag','plateau_detector')
+%         tper=[points(tix).min.t(1:end-1); points(tix).min.t(2:end)];
+%         ybase=[1;1]*features(tix).baseline;
+%         plot(tper,ybase,'b-','Tag','plateau_detector')
         
 %         %add the up/down times into a supplemented t and x for plotting
 %         % note: still misses intermediate up/down crossings
@@ -257,10 +258,10 @@ end
 %         plot(tsup,xAct,'r-','Tag','plateau_detector')
 %         plot(tsup,xSil,'b-','Tag','plateau_detector')
         
-        plot(points(tix).tMax,points(tix).xMax,'rv','Tag','plateau_detector')
-        plot(points(tix).tMin,points(tix).xMin,'r^','Tag','plateau_detector')
-        plot(points(tix).tDXMax,points(tix).xDXMax,'g>','Tag','plateau_detector')
-        plot(points(tix).tDXMin,points(tix).xDXMin,'g<','Tag','plateau_detector')
+        plot(points(tix).max.t,points(tix).max.x,'rv','Tag','plateau_detector')
+        plot(points(tix).min.t,points(tix).min.x,'r^','Tag','plateau_detector')
+        plot(points(tix).dxmax.t,points(tix).dxmax.x,'g>','Tag','plateau_detector')
+        plot(points(tix).dxmin.t,points(tix).dxmin.x,'g<','Tag','plateau_detector')
 
         end
         xlabel('t')

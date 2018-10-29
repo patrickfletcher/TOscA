@@ -17,7 +17,9 @@ classdef Experiment < handle
         t
         dt
         
-        segment=struct('name','','endpoints',[],'ix',[])
+        %segment is a subinterval of the trace, the basic unit within which
+        %periodicity will be detected and features will be computed
+        segment=struct('name','','endpoints',[],'ix',[],'points',struct(),'features',struct())
         nS
         
         %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
@@ -27,6 +29,11 @@ classdef Experiment < handle
         % --> actually, will likely determine period markers using only one
         % observable, then compute features relative to those markers in
         % other traces?
+        
+        %TODO: Customizeable pipeline? eg. array processingStep objects to define
+        %steps (name+operation+method+params), and pointer to which one
+        %gets periods measured and which one features get measured. pages
+        %of X correspond to each step: eg. X(:,:,1)=raw, X(:,:,2)=norm, ..., X(:,:,end)=per
         X
         Xnorm
         Xtrend
@@ -36,10 +43,6 @@ classdef Experiment < handle
         include %set element to zero to exclude a trace; X(:,include)
         nX
         
-        %if saving undeclared struct doesn't work try cell array for each segment
-        %maybe the detector functions could export struct definition when called with no inputs
-        points={}
-        features={}
         fnames
         
         fs %1/dt
@@ -196,6 +199,9 @@ classdef Experiment < handle
             expt.include=true(1,expt.nX);
         end
         
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Setup helper functions
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function defineSegments(expt,names,startTimes)
             %expects names as cell array, times as vector
             expt.nS=length(names);
@@ -208,11 +214,14 @@ classdef Experiment < handle
             end
         end
         
-        %save results. If required metadata is not set, force user to enter it now
-        function save()
+        function setGroup(expt,groupvar)
+            expt.group=groupvar;
+            expt.nG=unique(groupvar);
         end
         
-        %Preprocessing functions
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Preprocessing functions
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %TODO: forced order?
         %TODO: per-interval, or whole trace option (eg. linear detrend per interval)
         function normalize(expt,method,methodPar,doPlot)
@@ -244,11 +253,6 @@ classdef Experiment < handle
             expt.trendParam=methodPar;
         end
         
-        function setGroup(expt,groupvar)
-            expt.group=groupvar;
-            expt.nG=unique(groupvar);
-        end
-        
         function averageTraces(expt)
             XDTg=zeros(length(expt.t),expt.nG);
             for j=1:nI  
@@ -275,14 +279,21 @@ classdef Experiment < handle
         end
         
         
-        %Analysis functions - per interval
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Analysis functions
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function compute_features(expt,method,varargin)
             expt.detect_periods(method,varargin{:});
             expt.periodogram();
-            expt.fnames=fieldnames(expt.features{1})';
+            expt.fnames=fieldnames(expt.segment(1).features)';
             expt.featureMethod=method;
             expt.featureParam=varargin; %methodpar should be varargin?
         end
+        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Plotting functions
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         function plotTrace(expt,ax,whichPlot,showPts,tix)
             %dispatch function for plotting expt data
@@ -292,7 +303,7 @@ classdef Experiment < handle
             end
             
             if ~exist('showPts','var')||isempty(showPts)
-                if ~isempty(expt.points)
+                if ~isempty(expt.segment(1).points)
                     showPts=true;
                 else
                     showPts=false;
@@ -337,7 +348,7 @@ classdef Experiment < handle
             %xname={t,segment,fnames}
             %yname={fnames}
                 
-            if ~isempty(expt.features)
+            if ~isempty(expt.segment(1).features)
                 
             if isempty(ax)
                 ax=gca;
@@ -363,14 +374,20 @@ classdef Experiment < handle
             end
         end
         
+        %save results. If required metadata is not set, force user to enter it now
+        function save_results(expt)
+        end
+        
     end
     
     methods (Access=private)
         
         
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Analysis functions
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function detect_periods(expt,method,varargin)
-%             expt.points={};
-%             expt.features={};
+            
             extras={};
             for i=1:expt.nS
                 thisIx=expt.segment(i).ix;
@@ -410,8 +427,8 @@ classdef Experiment < handle
                 [feats.Amean]=Amean{:};
                 [feats.Astd]=Astd{:};
                 
-                expt.points{i}=pts;
-                expt.features{i}=feats;
+                expt.segment(i).points=pts;
+                expt.segment(i).features=feats;
             end
 %             expt.fnames=fieldnames(feats)';
         end
@@ -427,21 +444,29 @@ classdef Experiment < handle
                 Tpsd=num2cell(Tpsd);
                 fmax=num2cell(fmax);
                 Pmax=num2cell(Pmax);
-                [expt.features{i}.Tpsd]=Tpsd{:};
-                [expt.features{i}.fmax]=fmax{:};
-                [expt.features{i}.Pmax]=Pmax{:};
+                [expt.segment(i).features.Tpsd]=Tpsd{:};
+                [expt.segment(i).features.fmax]=fmax{:};
+                [expt.segment(i).features.Pmax]=Pmax{:};
             end
             expt.f=F;
 %             expt.fnames=fieldnames(expt.features{i})'; 
         end
+        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Plotting functions
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         function plot_t(expt,ax,whichPlot,tix,showPts)
             
             %BUG: matlab errors when mousing over data. datatips?? super
             %annoying
             
+            %TODO: support a line handle passed in instead of ax? i.e. just
+            %change x/y data of the line. still need to remove old pts and
+            %plot new ones if desired.
+            
             axes(ax)
-            delete(findobj(ax,'tag','plot_t'))
             cla(ax)
             hold(ax,'on');
             
@@ -467,32 +492,32 @@ classdef Experiment < handle
                     error([whichPlot, ' is not a supported trace to plot']);
             end
             
-            plot(ax,expt.t,x,'k','tag','plot_t')
+            plot(ax,expt.t,x,'k')
             if ~isempty(x2)
-            plot(ax,expt.t,x2,'tag','plot_t')
+            plot(ax,expt.t,x2)
             end
             
             if showPts
                 for i=1:expt.nS
                     tt=expt.t(expt.segment(i).ix);
                     xx=x(expt.segment(i).ix);
-                    pts=expt.points{i}(tix);
+                    pts=expt.segment(i).points(tix);
                     
-                    if length(pts.tPer)>1
+                    if length(pts.period.t)>1
                         
-                    xPer=interp1(tt,xx,pts.tPer); %this is necessary except for filt
-                    plot(ax,pts.tPer,xPer,'bs','tag','plot_t')
+                    xPer=interp1(tt,xx,pts.period.t); %this is necessary except for filt
+                    plot(ax,pts.period.t,xPer,'bs')
                     if doAllPts
-                        plot(ax,pts.tMin,pts.xMin,'r^','tag','plot_t')
-                        plot(ax,pts.tMax,pts.xMax,'rv','tag','plot_t')
-                        plot(ax,pts.tDXMin,pts.xDXMin,'g<','tag','plot_t')
-                        plot(ax,pts.tDXMax,pts.xDXMax,'g>','tag','plot_t')
-                        plot(ax,pts.tUp,pts.xUp,'bd','tag','plot_t')
-                        plot(ax,pts.tDown,pts.xDown,'bo','tag','plot_t')
+                        plot(ax,pts.min.t,pts.min.x,'r^')
+                        plot(ax,pts.max.t,pts.max.x,'rv')
+                        plot(ax,pts.dxmin.t,pts.dxmin.x,'g<')
+                        plot(ax,pts.dxmax.t,pts.dxmax.x,'g>')
+                        plot(ax,pts.up.t,pts.up.x,'bd')
+                        plot(ax,pts.down.t,pts.down.x,'bo')
                         
-                        tupdwn=[pts.tUp(1:length(pts.tDown)); pts.tDown];
-                        ythresh=[1;1]*expt.features{i}(tix).pthresh;
-                        plot(ax,tupdwn,ythresh,'b-','tag','plot_t')
+                        tupdwn=[pts.up.t(1:length(pts.down.t)); pts.down.t];
+                        ythresh=[1;1]*expt.segment(i).features(tix).pthresh;
+                        plot(ax,tupdwn,ythresh,'b-')
                     end
                     end
                 end
@@ -505,7 +530,7 @@ classdef Experiment < handle
             ylim(ax,[YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             for i=2:expt.nS
-                plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g','tag','plot_t')
+                plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
             end
             hold(ax,'off')
             
@@ -557,14 +582,14 @@ classdef Experiment < handle
                         
                 %TODO: more robust way? what if that particular trace had 1 or 0 periods detected
                 x=[];
-                y=expt.features{i}(tix).(yname);
+                y=expt.segment(i).features(tix).(yname);
                 if isempty(y)
                     return
                 end
                 
                 switch xname
                     case {'t'}
-                        xx=expt.points{i}(tix).tMax;
+                        xx=expt.segment(i).points(tix).max.t;
                         if isscalar(y) %must be a distribution feature
                             error('Only per-trace feature distributions may be plotted vs time')
                         else
@@ -576,7 +601,7 @@ classdef Experiment < handle
                         if isscalar(y) %plot all trace data as line seg, highlight point tix
 %                             xx=i+xJitter*randn(1,expt.nX);
                             xx=i*ones(1,expt.nX);
-                            yy=[expt.features{i}.(yname)];
+                            yy=[expt.segment(i).features.(yname)];
                             scalarFeatures=true;
                             HX(end+1,1)=i;
                             HY=[HY;y(:)];
@@ -587,12 +612,12 @@ classdef Experiment < handle
                         
 
                     case expt.fnames
-                        x=expt.features{i}(tix).(xname);
+                        x=expt.segment(i).features(tix).(xname);
                         
                         if isscalar(x) %plot all trace data, highlight point tix
                             if isscalar(y) %plot all trace data, highlight point tix
-                                xx=[expt.features{i}.(xname)];
-                                yy=[expt.features{i}.(yname)];
+                                xx=[expt.segment(i).features.(xname)];
+                                yy=[expt.segment(i).features.(yname)];
                                 scalarFeatures=true;
                                 HX=[HX;x(:)];
                                 HY=[HY;y(:)];

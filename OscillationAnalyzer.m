@@ -22,6 +22,7 @@ classdef OscillationAnalyzer<handle
         Tbig=15
         Tsmall=4
         
+        fnames
         xfeat
         yfeat
         
