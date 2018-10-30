@@ -26,6 +26,7 @@ classdef OscillationAnalyzer<handle
         xfeat
         yfeat
         
+        showPts=true
     end
     
     %GUI properties
@@ -150,20 +151,32 @@ classdef OscillationAnalyzer<handle
         end
         
         function plotData(app)
-            showPts=true;
-            app.expt.plotTrace(app.axRaw,'raw',showPts,app.tix)
-            app.expt.plotTrace(app.axNorm,'norm',showPts,app.tix)
-            app.expt.plotTrace(app.axDT,'detrend',showPts,app.tix)
-            app.expt.plotTrace(app.axFilt,'filt',showPts,app.tix)
+            %this function manages which axes are being plotted into
+            tic
+            app.hFig.CurrentAxes=app.axRaw;
+            app.expt.plotTrace([],'raw',app.tix,app.showPts)
+            app.hFig.CurrentAxes=app.axNorm;
+            app.expt.plotTrace(app.axNorm,'norm',app.tix,app.showPts)
+            app.hFig.CurrentAxes=app.axDT;
+            app.expt.plotTrace(app.axDT,'detrend',app.tix,app.showPts)
+            app.hFig.CurrentAxes=app.axFilt;
+            app.expt.plotTrace(app.axFilt,'filt',app.tix,app.showPts)
+            toc
             
+            tic
             set([app.axRaw,app.axNorm,app.axDT],'Xticklabel','');
-            
             linkaxes([app.axRaw,app.axNorm,app.axDT,app.axFilt],'x')
+            toc
             
+            tic
+            app.hFig.CurrentAxes=app.axPSD;
             app.expt.plotPeriodogram(app.axPSD,app.tix)
+            toc
             
+            tic
+            app.hFig.CurrentAxes=app.axFeat;
             app.expt.plotFeatures(app.axFeat,app.xfeat,app.yfeat,app.tix)
-            
+            toc
         end
         
         function keyPressDecoder(app, src, event)
