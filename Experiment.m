@@ -19,7 +19,7 @@ classdef Experiment < handle
         
         %segment is a subinterval of the trace, the basic unit within which
         %periodicity will be detected and features will be computed
-        segment=struct('name','','endpoints',[],'ix',[],'points',struct(),'features',struct())
+        segment=struct('name','','endpoints',[],'ix',[],'points',struct(),'features',struct(),'plot',@NOP)
         nS
         
         %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
@@ -42,6 +42,7 @@ classdef Experiment < handle
         
         include %set element to zero to exclude a trace; X(:,include)
         nX
+        
         
         fnames
         
@@ -295,27 +296,21 @@ classdef Experiment < handle
         % Plotting functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        function plotTrace(expt,ax,whichPlot,showPts,tix)
+        function plotTrace(expt,ax,whichPlot,tix,showPts)
             %dispatch function for plotting expt data
                         
-            if isempty(ax)
-                ax=gca;
-            end
-            
             if ~exist('showPts','var')||isempty(showPts)
-                if ~isempty(expt.segment(1).points)
-                    showPts=true;
-                else
-                    showPts=false;
-                end
+                showPts=true;
             end
             
             %no tix => interactive figure
             if ~exist('tix','var')||isempty(tix)
                 tix=1;
                 figID=gcf; %newfig?
-                figID.KeyPressFcn={@expt.traceKeypress,whichPlot,showPts};
+                figID.KeyPressFcn={@expt.traceKeypress,whichPlot};
                 figID.UserData=tix; %store the current trace ID with figure
+            end
+            if isempty(ax)
                 ax=gca;
             end
             
@@ -327,15 +322,13 @@ classdef Experiment < handle
             %overlay psd for each segment
             if ~isempty(expt.psd)
                        
-            if isempty(ax)
-                ax=gca;
-            end
-            
             if ~exist('tix','var')||isempty(tix)
                 tix=1;
                 figID=gcf; %newfig?
                 figID.KeyPressFcn=@expt.psdKeypress;
                 figID.UserData=tix; %store the current trace ID with figure
+            end
+            if isempty(ax)
                 ax=gca;
             end
             
@@ -397,38 +390,40 @@ classdef Experiment < handle
                     case {'peaks'}
                         delta=varargin{1};
                         if length(varargin)>1, extras=varargin(2:end); end
-                        [pts,feats]=peak_detector(tt,xx,delta,extras{:});
+                        [~, ~, result]=peak_detector(tt,xx,delta,extras{:});
 
                     case {'threshold'}
                         frac=varargin{1};
                         if length(varargin)>1, extras=varargin(2:end); end
-                        [pts,feats]=plateau_detector(tt,xx,frac,extras{:});
+                        [~, ~, result]=plateau_detector(tt,xx,frac,extras{:});
                 end
                 
                 %also get xvalues for all X types
                 %independently max/min per period for non-filt traces (detrend at least)
                 
                 %get average features per segment per trace
-                Tmean=arrayfun(@(x)mean(x.period),feats); Tmean=num2cell(Tmean);
-                Tstd=arrayfun(@(x)std(x.period),feats); Tstd=num2cell(Tstd);
-                APDmean=arrayfun(@(x)mean(x.APD),feats); APDmean=num2cell(APDmean);
-                APDstd=arrayfun(@(x)std(x.APD),feats); APDstd=num2cell(APDstd);
-                PFmean=arrayfun(@(x)mean(x.PF),feats); PFmean=num2cell(PFmean);
-                PFstd=arrayfun(@(x)std(x.PF),feats); PFstd=num2cell(PFstd);
-                Amean=arrayfun(@(x)mean(x.amp),feats); Amean=num2cell(Amean);
-                Astd=arrayfun(@(x)std(x.amp),feats); Astd=num2cell(Astd);
+%                 Tmean=arrayfun(@(x)mean(x.period),feats); Tmean=num2cell(Tmean);
+%                 Tstd=arrayfun(@(x)std(x.period),feats); Tstd=num2cell(Tstd);
+%                 APDmean=arrayfun(@(x)mean(x.APD),feats); APDmean=num2cell(APDmean);
+%                 APDstd=arrayfun(@(x)std(x.APD),feats); APDstd=num2cell(APDstd);
+%                 PFmean=arrayfun(@(x)mean(x.PF),feats); PFmean=num2cell(PFmean);
+%                 PFstd=arrayfun(@(x)std(x.PF),feats); PFstd=num2cell(PFstd);
+%                 Amean=arrayfun(@(x)mean(x.amp),feats); Amean=num2cell(Amean);
+%                 Astd=arrayfun(@(x)std(x.amp),feats); Astd=num2cell(Astd);
+%                 
+%                 [feats.Tmean]=Tmean{:};
+%                 [feats.Tstd]=Tstd{:};
+%                 [feats.APDmean]=APDmean{:};
+%                 [feats.APDstd]=APDstd{:};
+%                 [feats.PFmean]=PFmean{:};
+%                 [feats.PFstd]=PFstd{:};
+%                 [feats.Amean]=Amean{:};
+%                 [feats.Astd]=Astd{:};
                 
-                [feats.Tmean]=Tmean{:};
-                [feats.Tstd]=Tstd{:};
-                [feats.APDmean]=APDmean{:};
-                [feats.APDstd]=APDstd{:};
-                [feats.PFmean]=PFmean{:};
-                [feats.PFstd]=PFstd{:};
-                [feats.Amean]=Amean{:};
-                [feats.Astd]=Astd{:};
-                
-                expt.segment(i).points=pts;
-                expt.segment(i).features=feats;
+                expt.segment(i).points=result.points;
+                expt.segment(i).features=result.features;
+                expt.segment(i).plot=result.plot;
+                expt.segment(i).compute=result.compute;
             end
 %             expt.fnames=fieldnames(feats)';
         end
@@ -466,11 +461,11 @@ classdef Experiment < handle
             %change x/y data of the line. still need to remove old pts and
             %plot new ones if desired.
             
-            axes(ax)
-            cla(ax)
-            hold(ax,'on');
+%             axes(ax)
+            cla
+            hold on
             
-            doAllPts=false;
+            points_option='period';
             x2=[];
             switch whichPlot
                 case {'raw'}
@@ -486,17 +481,32 @@ classdef Experiment < handle
                     
                 case {'filt'}
                     x=expt.Xfilt(:,tix);
-                    doAllPts=true;
+                    points_option='all';
                     
                 otherwise
                     error([whichPlot, ' is not a supported trace to plot']);
             end
             
-            plot(ax,expt.t,x,'k')
+            plot(expt.t,x,'k')
             if ~isempty(x2)
-            plot(ax,expt.t,x2)
+                plot(expt.t,x2)
             end
             
+            
+            %slower:
+%             if ~showPts
+%                 points_option='none';
+%             end
+%             plotTrace=false;
+%             for i=1:expt.nS
+%                 tt=expt.t(expt.segment(i).ix);
+%                 xx=x(expt.segment(i).ix);
+%                 pts=expt.segment(i).points(tix);
+%                 pts.period.x=interp1(tt,xx,pts.period.t); %interp x value of period markers
+%                 
+%                 expt.segment(i).plot(tt,xx,pts,1,plotTrace,points_option);
+%             end
+
             if showPts
                 for i=1:expt.nS
                     tt=expt.t(expt.segment(i).ix);
@@ -505,46 +515,57 @@ classdef Experiment < handle
                     
                     if length(pts.period.t)>1
                         
-                    xPer=interp1(tt,xx,pts.period.t); %this is necessary except for filt
-                    plot(ax,pts.period.t,xPer,'bs')
-                    if doAllPts
-                        plot(ax,pts.min.t,pts.min.x,'r^')
-                        plot(ax,pts.max.t,pts.max.x,'rv')
-                        plot(ax,pts.dxmin.t,pts.dxmin.x,'g<')
-                        plot(ax,pts.dxmax.t,pts.dxmax.x,'g>')
-                        plot(ax,pts.up.t,pts.up.x,'bd')
-                        plot(ax,pts.down.t,pts.down.x,'bo')
+                    if points_option=="all"
+                        plot(pts.min.t,pts.min.x,'r^')
+                        plot(pts.max.t,pts.max.x,'rv')
+                        plot(pts.dxmin.t,pts.dxmin.x,'g<')
+                        plot(pts.dxmax.t,pts.dxmax.x,'g>')
+                        plot(pts.up.t,pts.up.x,'bd')
+                        plot(pts.down.t,pts.down.x,'bo')
+%                         line(pts.min.t,pts.min.x,'color','r','marker','^','linestyle','none')
+%                         line(pts.max.t,pts.max.x,'color','r','marker','v','linestyle','none')
+%                         line(pts.dxmin.t,pts.dxmin.x,'color','g','marker','<','linestyle','none')
+%                         line(pts.dxmax.t,pts.dxmax.x,'color','g','marker','>','linestyle','none')
+%                         line(pts.up.t,pts.up.x,'color','b','marker','d','linestyle','none')
+%                         line(pts.down.t,pts.down.x,'color','b','marker','o','linestyle','none')
                         
-                        tupdwn=[pts.up.t(1:length(pts.down.t)); pts.down.t];
-                        ythresh=[1;1]*expt.segment(i).features(tix).pthresh;
-                        plot(ax,tupdwn,ythresh,'b-')
+%                         tupdwn=[pts.up.t(1:length(pts.down.t)); pts.down.t];
+%                         ythresh=[1;1]*expt.segment(i).features(tix).pthresh;
+%                         plot(ax,tupdwn,ythresh,'b-')
+                    else
+                    
+                        xPer=interp1(tt,xx,pts.period.t); %this is necessary except for filt
+                        plot(pts.period.t,xPer,'bs')
+%                         line(pts.period.t,xPer,'color','b','marker','s','linestyle','none')
+
                     end
+                    
                     end
                 end
             end
             
             axis tight
-            xlabel(ax,'t')
-            ylabel(ax,['X',whichPlot])
-            YLIM=ylim(ax);
-            ylim(ax,[YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+%             xlabel('t')
+%             ylabel(['X',whichPlot])
+            YLIM=ylim();
+            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             for i=2:expt.nS
-                plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
             end
-            hold(ax,'off')
             
+            hold off
         end
         
         function plot_psd(expt,ax,tix)
             
-            axes(ax)
+%             axes(ax)
             cla
-            hold(ax,'on');
+            hold on;
             
             for i=1:expt.nS
-                plot(ax,expt.f,expt.psd(:,tix,i)); 
-%                 plot(ax,expt.f,pow2db(expt.psd(:,tix,i)));
+                plot(expt.f,expt.psd(:,tix,i)); 
+%                 plot(expt.f,pow2db(expt.psd(:,tix,i)));
             end
             % set(gca,'yscale','log')
 %             fhi=find(
@@ -556,14 +577,14 @@ classdef Experiment < handle
             if expt.nS>1
                 legend({expt.segment.name})
             end
-            hold(ax,'off')
+            hold off
         end
         
         function plot_features(expt,ax,xname,yname,tix)
             
-            axes(ax)
+%             axes(ax)
             cla
-            hold(ax,'on');
+            hold on;
             
             
             %x,y - highlight point for scalar features
@@ -649,13 +670,13 @@ classdef Experiment < handle
                 YY=cell2mat(YY);
                 
                 if expt.nS>1
-                    plot(ax,XX,YY,'-','color',[0.5,0.5,0.5])
-                    plot(ax,HX,HY,'k-','linewidth',1.5)
+                    plot(XX,YY,'-','color',[0.5,0.5,0.5])
+                    plot(HX,HY,'k-','linewidth',1.5)
                 end
                 
-                h2=plot(ax,XX',YY','o');
+                h2=plot(XX',YY','o');
                 for i=1:expt.nS
-                    h4=plot(ax,HX(i),HY(i),'o');
+                    h4=plot(HX(i),HY(i),'o');
                     h4.Color=h2(i).Color;
                     h4.MarkerFaceColor=h2(i).Color;
                 end
@@ -664,7 +685,7 @@ classdef Experiment < handle
                 end
             else
                 for i=1:expt.nS
-                    hl(i)=plot(ax,XX{i},YY{i},'o');
+                    hl(i)=plot(XX{i},YY{i},'o');
                 end
                 if colorBySegment
                     legend(hl,{expt.segment.name})
@@ -676,8 +697,8 @@ classdef Experiment < handle
             end
             
             axis tight
-            YLIM=ylim(ax);
-            ylim(ax,[YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+            YLIM=ylim();
+            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             switch xname
                     case {'t'}
@@ -687,22 +708,22 @@ classdef Experiment < handle
                         end
                         
                         for i=2:expt.nS
-                            plot(ax,expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                            plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
                         end
                         
                     case {'segment'}
-                        xticks(ax,1:expt.nS)
-                        xticklabels(ax,{expt.segment.name})
-                        xlim(ax,[0.5,expt.nS+0.5])
-                        xlabel(ax,'segment')
+                        xticks(1:expt.nS)
+                        xticklabels({expt.segment.name})
+                        xlim([0.5,expt.nS+0.5])
+                        xlabel('segment')
                         
                     case expt.fnames
-                        xlabel(ax,xname)
+                        xlabel(xname)
             end
             
-            ylabel(ax,yname)
+            ylabel(yname)
             
-            hold(ax,'off')
+            hold off
             
         end
         
@@ -713,14 +734,13 @@ classdef Experiment < handle
                 case {'leftarrow'}
                     if tix>1
                         tix=tix-1;
-                        expt.plot_t(ax,whichPlot,tix,showPts)
                     end
                 case {'rightarrow'}
                     if tix<expt.nX
                         tix=tix+1;
-                        expt.plot_t(ax,whichPlot,tix,showPts)
                     end
             end
+            expt.plot_t(ax,whichPlot,tix,showPts)
             src.UserData=tix;
         end
         
@@ -731,14 +751,13 @@ classdef Experiment < handle
                 case {'leftarrow'}
                     if tix>1
                         tix=tix-1;
-                        expt.plot_psd(ax,tix)
                     end
                 case {'rightarrow'}
                     if tix<expt.nX
                         tix=tix+1;
-                        expt.plot_psd(ax,tix)
                     end
             end
+            expt.plot_psd(ax,tix)
             src.UserData=tix;
         end
         
@@ -749,14 +768,13 @@ classdef Experiment < handle
                 case {'leftarrow'}
                     if tix>1
                         tix=tix-1;
-                        expt.plot_features(ax,xname,yname,tix);
                     end
                 case {'rightarrow'}
                     if tix<expt.nX
                         tix=tix+1;
-                        expt.plot_features(ax,xname,yname,tix);
                     end
             end
+            expt.plot_features(ax,xname,yname,tix);
             src.UserData=tix;
         end
     end

@@ -1,8 +1,8 @@
-function [points,features]=plateau_detector(t, X, varargin)
+function [Fdist,points,results]=plateau_detector(t, X, varargin)
 %PLATEAU_DETECTOR A plateau detector for oscillating timeseries. Uses Shmitt
 % trigger concept - upward transition threshold >= downward transition
 % threshold. The timeseries is divided into periods measured from upward
-% transition to upward transition. 
+% transition to upward transition.
 %
 % If results are plotted, use left/right arrows to switch between columns
 % of X.
@@ -12,7 +12,7 @@ function [points,features]=plateau_detector(t, X, varargin)
 %  X - vector matching t, or matrix with columns matching t
 %
 % Optional input:
-%  f - fraction of amplitude for threshold: 
+%  f - fraction of amplitude for threshold:
 %     scalar {default, f=0.5}, upward=downward threshold,
 %     vector, f=[upFraction,downFraction] with upFraction>=downFraction.
 %
@@ -32,7 +32,7 @@ periodMarker='min';
 if isvector(X)
     X=X(:);
 end
-    
+
 [thrPtiles,fracUp,fracDown,minAmp,threshMethod,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
@@ -91,12 +91,11 @@ pt=struct('ix',[],'t',[],'x',[],'dx',[]);
 points=repmat(struct('period',pt,'up',pt,'down',pt,...
     'max',pt,'min',pt,'dxmax',pt,'dxmin',pt),1,nX);
 
-
 for i=2:length(t)
     
     %if strated up, then went below thrUp but not below thrDown, set isUp=0
-%     firstDown=isUp & X(i,:)<thrUp & arrayfun(@(x)isempty(x.up.ix),points);
-%     isUp(firstDown)=0;
+    firstDown=isUp & X(i,:)<thrUp & arrayfun(@(x)isempty(x.up.ix),points);
+    isUp(firstDown)=0;
     
     %check for downward-transition and upward-transition
     isDownTransition=isUp&X(i,:)<=thrDown & sufficientGlobalAmp;
@@ -145,15 +144,13 @@ for i=2:length(t)
     
 end
 
-numUp=arrayfun(@(x) length(x.up.t),points);
-
-features=struct('period',[],'APD',[],'PF',[],'amp',[],'baseline',[],'peaks',[],'pthresh',[],'maxslope',[],'minslope',[]);
-features=struct();
+%clean up period maker points
 for i=1:nX
-        
-    if numel(points(i).up.t)>1
+    points(i).period.ix=points(i).up.ix;
+    points(i).period.t=points(i).up.t;
+    points(i).period.x=points(i).up.x;
     
-%     trim
+    % trim away down transitions outside first/last up transitions
     if points(i).down.t(1)<=points(i).up.t(1)
         points(i).down.ix=points(i).down.ix(2:end);
         points(i).down.t=points(i).down.t(2:end);
@@ -164,173 +161,257 @@ for i=1:nX
         points(i).down.t=points(i).down.t(1:end-1);
         points(i).down.x=points(i).down.x(1:end-1);
     end
-    
-    points(i).period.ix=points(i).up.ix;
-    points(i).period.t=points(i).up.t;
-    points(i).period.x=points(i).up.x;
-    
-    nT=length(points(i).up.t)-1;
-    
-    features(i).period=diff(points(i).up.t);
-    features(i).APD=points(i).down.t-points(i).up.t(1:end-1); %active phase duration
-    features(i).PF=features(i).APD./features(i).period;
-    
-    for j=1:nT
-        tt=points(i).up.ix(j):points(i).up.ix(j+1)-1;
-        [xmax,imax]=max(X(tt,i));
-        points(i).max.ix(j)=tt(1)+imax-1;
-        points(i).max.t(j)=t(tt(imax));
-        points(i).max.x(j)=xmax;
-        
-        [xmin,imin]=min(X(tt,i));
-        points(i).min.ix(j)=tt(1)+imin-1;
-        points(i).min.t(j)=t(tt(imin));
-        points(i).min.x(j)=xmin;
-        
-        %compute min slope anywhere in the period
-        [dxmin,idxmin]=min(DX(tt,i));
-        points(i).dxmin.ix(j)=tt(1)+idxmin-1;
-        points(i).dxmin.t(j)=t(tt(idxmin));
-        points(i).dxmin.x(j)=X(tt(idxmin),i);
-        points(i).dxmin.dx(j)=dxmin;
-        
-        %compute maxslope only in the active phase? 
-        tt=points(i).up.ix(j):points(i).down.ix(j);
-        [dxmax,idxmax]=max(DX(tt,i));
-        points(i).dxmax.ix(j)=tt(1)+idxmax-1;
-        points(i).dxmax.t(j)=t(tt(idxmax));
-        points(i).dxmax.x(j)=X(tt(idxmax),i);
-        points(i).dxmax.dx(j)=dxmax;
-    end
-    
-    features(i).baseline=points(i).min.x;
-    features(i).peaks=points(i).max.x;
-    features(i).amp=points(i).max.x-points(i).min.x;
-    features(i).range=globalXamp(i);
-    features(i).thrUp=thrUp(i);
-    features(i).thrDown=thrDown(i);
-    features(i).pthresh=(thrUp(i)+thrDown(i))/2;
-    features(i).maxslope=points(i).dxmax.dx;
-    features(i).minslope=points(i).dxmin.dx;
-    
-    else
-        %had less than two minima: can't compute features.
-        features(i).period=[];
-        features(i).baseline=[];
-        features(i).peaks=[];
-        features(i).amp=[];
-        features(i).APD=[];
-        features(i).PF=[];
-    end
 end
+
+%compute the extra points and features per period
+[Fdist,points]=compute_features(t,X,points,DX);
+
+%summarize features (mean+std?)
+
+%results struct as output, with attached function handles for computing
+%features and plotting points
+results.points=points;
+results.features=Fdist;
+results.compute=@compute_features;
+results.plot=@plot_data; %simple plot fcn for one trace of interest
+results.plot_interactive=@plot_interactive; %adds keypressfcn to switch traces
 
 %plot to show performance
 if nargout==0||doPlot==1
-    tix=1;
-    if isempty(figID)
-        figID=gcf; %new figure if none available, otherwise current fig
-    else
-        figID=figure(figID);
-    end
     if dokeypress
-        figID.KeyPressFcn=@keypressFcn;
+        plot_interactive(figID,t,X,points)
+    else
+        if isempty(figID)
+            figID=gcf; %new figure if none available, otherwise current fig
+        else
+            figID=figure(figID);
+        end
+        plot_data(t,X,points,1)
     end
-    
-    plotData()
 end
 
-%nested functions can see variables in caller's scope
-    function plotData()
-%         clf
-        delete(findobj(gca,'Tag','plateau_detector'));
+end
 
-        plot(t,X(:,tix),'k-','Tag','plateau_detector')
-        axis tight
-        hold on
-        plot(points(tix).up.t,points(tix).up.x,'bs','Tag','plateau_detector')
-        plot(points(tix).down.t,points(tix).down.x,'bo','Tag','plateau_detector')
-        plot(points(tix).max.t,points(tix).max.x,'rv','Tag','plateau_detector')
-        plot(points(tix).min.t,points(tix).min.x,'r^','Tag','plateau_detector')
-        plot(points(tix).dxmax.t,points(tix).dxmax.x,'g>','Tag','plateau_detector')
-        plot(points(tix).dxmin.t,points(tix).dxmin.x,'g<','Tag','plateau_detector')
-        plot(xlim(),thrUp(tix)*[1,1],'r--','Tag','plateau_detector')
-        if thrUp~=thrDown
-            plot(xlim(),thrDown(tix)*[1,1],'b--','Tag','plateau_detector')
-        end
-        xlabel('t')
-        ylabel('x')
-        YLIM=ylim();
-        ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
-    end
+%up/down times are retained, all other points/features computed from those
+function [Fdist,points]=compute_features(t,X,points,DX)
 
-    function keypressFcn(~,event)
-        switch(event.Key)
-            case {'leftarrow'}
-                if tix>1
-                    tix=tix-1;
-                    plotData()
-                end
-            case {'rightarrow'}
-                if tix<nX
-                    tix=tix+1;
-                    plotData()
-                end
+if ~exist('DX','var')
+    DX=slopeY(t,X);
+end
+
+nX=size(X,2);
+
+Fdist=repmat( struct('period',0,'APD',0,'PF',0,'amp',[],...
+    'baseline',[],'peaks',[],'maxslope',0,'minslope',0) ,1,nX); %'range',[],'thrUp',[],'thrDown',[],'pthresh',[]
+
+for i=1:nX
+    
+    %find the x value at up and down marker times (up is period marker)
+    points(i).up.x=interp1(t,X(:,i),points(i).up.t); 
+    points(i).period.x=points(i).up.x;
+    points(i).down.x=interp1(t,X(:,i),points(i).down.t);
+    
+    nUp=length(points(i).up.t);
+    nT=nUp-1;
+        
+    if nUp>1
+        
+        for j=1:nT
+            tt=points(i).up.ix(j):points(i).up.ix(j+1)-1;
+            [xmax,imax]=max(X(tt,i));
+            points(i).max.ix(j)=tt(1)+imax-1;
+            points(i).max.t(j)=t(tt(imax));
+            points(i).max.x(j)=xmax;
+            
+            [xmin,imin]=min(X(tt,i));
+            points(i).min.ix(j)=tt(1)+imin-1;
+            points(i).min.t(j)=t(tt(imin));
+            points(i).min.x(j)=xmin;
+            
+            %compute min slope anywhere in the period
+            [dxmin,idxmin]=min(DX(tt,i));
+            points(i).dxmin.ix(j)=tt(1)+idxmin-1;
+            points(i).dxmin.t(j)=t(tt(idxmin));
+            points(i).dxmin.x(j)=X(tt(idxmin),i);
+            points(i).dxmin.dx(j)=dxmin;
+            
+            %compute maxslope only in the active phase?
+            tt=points(i).up.ix(j):points(i).down.ix(j);
+            [dxmax,idxmax]=max(DX(tt,i));
+            points(i).dxmax.ix(j)=tt(1)+idxmax-1;
+            points(i).dxmax.t(j)=t(tt(idxmax));
+            points(i).dxmax.x(j)=X(tt(idxmax),i);
+            points(i).dxmax.dx(j)=dxmax;
         end
         
+        %these are scalar features:
+        %     Fdist(i).range=globalXamp(i);
+        %     Fdist(i).thrUp=thrUp(i);
+        %     Fdist(i).thrDown=thrDown(i);
+        %     Fdist(i).pthresh=(thrUp(i)+thrDown(i))/2;
+        
+        Fdist(i).period=diff(points(i).up.t);
+        Fdist(i).APD=points(i).down.t-points(i).up.t(1:end-1); %active phase duration
+        Fdist(i).PF=Fdist(i).APD./Fdist(i).period;
+        Fdist(i).baseline=points(i).min.x;
+        Fdist(i).peaks=points(i).max.x;
+        Fdist(i).amp=points(i).max.x-points(i).min.x;
+        Fdist(i).maxslope=points(i).dxmax.dx;
+        Fdist(i).minslope=points(i).dxmin.dx;
+        
+    else
+        %had less than two up transitions: can't compute features.
+        if ~isempty(points(i).min.x)
+            Fdist(i).baseline=points(i).min.x;
+        end
+        if ~isempty(points(i).max.x)
+            Fdist(i).peaks=points(i).max.x;
+        end
+        if ~isempty(points(i).max.x) && ~isempty(points(i).min.x)
+            Fdist(i).amp=points(i).max.x-points(i).min.x;
+        end
+        if ~isempty(points(i).dxmax.dx)
+            Fdist(i).maxslope=points(i).dxmax.dx;
+        end
+        if ~isempty(points(i).dxmin.dx)
+            Fdist(i).minslope=points(i).dxmin.dx;
+        end
     end
+end
 
+end
+
+function plot_data(t,X,points,tix,showTrace,option)
+
+if ~exist('showTrace','var') || isempty(showTrace)
+    showTrace=true;
+end
+if ~exist('option','var') || isempty(option)
+    option='all';
+end
+
+if showTrace
+    plot(t,X(:,tix),'k-')
+    axis tight
+end
+
+switch option 
+
+    case {'period'}
+        hold on
+        plot(points(tix).period.t,points(tix).period.x,'bs')
+        hold off
+        
+    case {'all'}
+        hold on
+        plot(points(tix).up.t,points(tix).up.x,'bs')
+        plot(points(tix).down.t,points(tix).down.x,'bo')
+        plot(points(tix).max.t,points(tix).max.x,'rv')
+        plot(points(tix).min.t,points(tix).min.x,'r^')
+        plot(points(tix).dxmax.t,points(tix).dxmax.x,'g>')
+        plot(points(tix).dxmin.t,points(tix).dxmin.x,'g<')
+        % plot(xlim(),thrUp(tix)*[1,1],'r--')
+        % if thrUp~=thrDown
+        %     plot(xlim(),thrDown(tix)*[1,1],'b--')
+        % end
+        hold off
+        
+    otherwise
+        
+end
+
+xlabel('t')
+ylabel('x')
+YLIM=ylim();
+ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+end
+
+function plot_interactive(figID,t,X,points)
+tix=1;
+if isempty(figID)
+    figID=gcf; %new figure if none available, otherwise current fig
+else
+    figID=figure(figID);
+end
+figID.KeyPressFcn=@keypressFcn;
+figID.UserData.tix=tix; %store tix (trace to plot) in userdata
+figID.UserData.t=t;
+figID.UserData.X=X;
+figID.UserData.points=points;
+
+plot_data(t,X,points,tix)
+end
+
+function keypressFcn(src,event)
+tix=src.UserData.tix;
+t=src.UserData.t;
+X=src.UserData.X; nX=size(X,2);
+points=src.UserData.points;
+switch(event.Key)
+    case {'leftarrow'}
+        if tix>1
+            tix=tix-1;
+            plot_data(t,X,points,tix)
+        end
+    case {'rightarrow'}
+        if tix<nX
+            tix=tix+1;
+            plot_data(t,X,points,tix)
+        end
+end
+src.UserData.tix=tix;
 end
 
 function [thrPtiles,fracUp,fracDown,minAmp,threshMethod,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
 
-    %default parameters
-    defaultF=[0.5,0.4]; %near halfmax
-    defaultthrPtiles=[0,100];
-    defaultminAmp=0;
-    defaultThresholdMethod='medfrac';
-    doInterp=true;
-    doPlot=false;
-    doKeypress=true;
-    figID=[];
-    
-    p=inputParser;
-    validX=@(x) isreal(x) && size(x,1)==length(t); %traces are columns of X
-    validSwitch=@(x) isscalar(x) && (isnumeric(x)||islogical(x));
-    addRequired(p,'t',@(x) isreal(x));
-    addRequired(p,'X',validX);
-    addOptional(p,'f',defaultF);  %somehow adding the validation function here messes things up
-    addParameter(p,'ThresholdPercentiles',defaultthrPtiles,@(x) isreal(x) && numel(x)==2);
-    addParameter(p,'MinimumAmplitude',defaultminAmp,@isreal);
-    addParameter(p,'ThresholdMethod',defaultThresholdMethod);
-    addParameter(p,'Interpolate',doInterp,validSwitch);
-    addParameter(p,'Plot',doPlot,validSwitch);
-    addParameter(p,'Keypress',doKeypress,validSwitch);
-    addParameter(p,'FigureID',figID);
-    
-    parse(p,t,X,varargin{:});
-    
-    f=p.Results.f;
-    thrPtiles=p.Results.ThresholdPercentiles;
-    minAmp=p.Results.MinimumAmplitude;
-    threshMethod=p.Results.ThresholdMethod;
-    doInterp=p.Results.Interpolate;
-    doPlot=p.Results.Plot;
-    figID=p.Results.FigureID;
-    dokeypress=p.Results.Keypress;
-    
-    if isscalar(f)
-        fracUp=f;
-        fracDown=f;
-    elseif length(f)==2
-        fracUp=f(1);
-        fracDown=f(2);
-    else
-        error('Invalid value for fractional threshold')
-    end
-    
+%default parameters
+defaultF=[0.5,0.4]; %near halfmax
+defaultthrPtiles=[0,100];
+defaultminAmp=0;
+defaultThresholdMethod='medfrac';
+doInterp=true;
+doPlot=false;
+doKeypress=true;
+figID=[];
+
+p=inputParser;
+validX=@(x) isreal(x) && size(x,1)==length(t); %traces are columns of X
+validSwitch=@(x) isscalar(x) && (isnumeric(x)||islogical(x));
+addRequired(p,'t',@(x) isreal(x));
+addRequired(p,'X',validX);
+addOptional(p,'f',defaultF);  %somehow adding the validation function here messes things up
+addParameter(p,'ThresholdPercentiles',defaultthrPtiles,@(x) isreal(x) && numel(x)==2);
+addParameter(p,'MinimumAmplitude',defaultminAmp,@isreal);
+addParameter(p,'ThresholdMethod',defaultThresholdMethod);
+addParameter(p,'Interpolate',doInterp,validSwitch);
+addParameter(p,'Plot',doPlot,validSwitch);
+addParameter(p,'Keypress',doKeypress,validSwitch);
+addParameter(p,'FigureID',figID);
+
+parse(p,t,X,varargin{:});
+
+f=p.Results.f;
+thrPtiles=p.Results.ThresholdPercentiles;
+minAmp=p.Results.MinimumAmplitude;
+threshMethod=p.Results.ThresholdMethod;
+doInterp=p.Results.Interpolate;
+doPlot=p.Results.Plot;
+figID=p.Results.FigureID;
+dokeypress=p.Results.Keypress;
+
+if isscalar(f)
+    fracUp=f;
+    fracDown=f;
+elseif length(f)==2
+    fracUp=f(1);
+    fracDown=f(2);
+else
+    error('Invalid value for fractional threshold')
+end
+
 %     %snap to fracUp?
 %     if fracDown>fracUp
 %         fracDown=fracUp;
 %     end
-    
+
 end
