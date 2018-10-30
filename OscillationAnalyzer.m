@@ -158,11 +158,11 @@ classdef OscillationAnalyzer<handle
             app.hFig.CurrentAxes=app.axRaw;
             app.expt.plotTrace([],'raw',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axNorm;
-            app.expt.plotTrace(app.axNorm,'norm',app.tix,app.showPts)
+            app.expt.plotTrace([],'norm',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axDT;
-            app.expt.plotTrace(app.axDT,'detrend',app.tix,app.showPts)
+            app.expt.plotTrace([],'detrend',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axFilt;
-            app.expt.plotTrace(app.axFilt,'filt',app.tix,app.showPts)
+            app.expt.plotTrace([],'filt',app.tix,app.showPts)
             
             set([app.axRaw,app.axNorm,app.axDT],'Xticklabel','');
 %             toc
