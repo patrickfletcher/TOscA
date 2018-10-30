@@ -144,6 +144,8 @@ classdef OscillationAnalyzer<handle
             app.axPSD=axes('Position',[xr,yl+hr+gr,wr,0.2]);
             app.axFeat=axes('Position',[xr,yl,wr,hr]);
             
+            linkaxes([app.axRaw,app.axNorm,app.axDT,app.axFilt],'x')
+            
             app.check_include=uicontrol('Style','checkbox','units','normalized',...
                 'Position',[xr,yl+2*(hr+gr),wr/2,0.05],...
                 'String','include','Value',true,'Callback',@app.toggle_include);
@@ -152,7 +154,7 @@ classdef OscillationAnalyzer<handle
         
         function plotData(app)
             %this function manages which axes are being plotted into
-            tic
+%             tic
             app.hFig.CurrentAxes=app.axRaw;
             app.expt.plotTrace([],'raw',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axNorm;
@@ -161,22 +163,20 @@ classdef OscillationAnalyzer<handle
             app.expt.plotTrace(app.axDT,'detrend',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axFilt;
             app.expt.plotTrace(app.axFilt,'filt',app.tix,app.showPts)
-            toc
             
-            tic
             set([app.axRaw,app.axNorm,app.axDT],'Xticklabel','');
-            linkaxes([app.axRaw,app.axNorm,app.axDT,app.axFilt],'x')
-            toc
+%             toc
             
-            tic
+            
+%             tic
             app.hFig.CurrentAxes=app.axPSD;
             app.expt.plotPeriodogram(app.axPSD,app.tix)
-            toc
+%             toc
             
-            tic
+%             tic
             app.hFig.CurrentAxes=app.axFeat;
             app.expt.plotFeatures(app.axFeat,app.xfeat,app.yfeat,app.tix)
-            toc
+%             toc
         end
         
         function keyPressDecoder(app, src, event)
