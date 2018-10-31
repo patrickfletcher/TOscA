@@ -198,7 +198,7 @@ end
 
 nX=size(X,2);
 
-Fdist=repmat( struct('period',0,'APD',0,'PF',0,'amp',[],...
+Fdist=repmat( struct('period',0,'apd',0,'spd',0,'pf',0,'amp',[],...
     'baseline',[],'peaks',[],'maxslope',0,'minslope',0) ,1,nX); %'range',[],'thrUp',[],'thrDown',[],'pthresh',[]
 
 for i=1:nX
@@ -213,7 +213,8 @@ for i=1:nX
     if nPer>=1
         
         for j=1:nPer
-            ix=points(i).period.ix(j):points(i).period.ix(j+1);
+%             ix=points(i).period.ix(j):points(i).period.ix(j+1);
+            ix=find(t>=points(i).period.t(j) & t<=points(i).period.t(j+1));
             tt=t(ix);
             xx=X(ix,i);
             dx=DX(ix,i);
@@ -235,7 +236,8 @@ for i=1:nX
             points(i).dxmin.dx(j)=dxmin;
             
             %compute maxslope only in the active phase? Not if finding max/min in a different trace than periods
-            ix=points(i).up.ix(j):points(i).down.ix(j);
+%             ix=points(i).up.ix(j):points(i).down.ix(j);
+            ix=find(t>=points(i).up.t(j) & t<=points(i).down.t(j));
             xx=X(ix,i);
             dx=DX(ix,i);
             [dxmax,idxmax]=max(dx);
@@ -252,8 +254,9 @@ for i=1:nX
         %     Fdist(i).pthresh=(thrUp(i)+thrDown(i))/2;
         
         Fdist(i).period=diff(points(i).up.t);
-        Fdist(i).APD=points(i).down.t-points(i).up.t(1:end-1); %active phase duration
-        Fdist(i).PF=Fdist(i).APD./Fdist(i).period;
+        Fdist(i).apd=points(i).down.t-points(i).up.t(1:end-1); %active phase duration
+        Fdist(i).spd=Fdist(i).period-Fdist(i).apd;
+        Fdist(i).pf=Fdist(i).apd./Fdist(i).period;
         Fdist(i).baseline=points(i).min.x;
         Fdist(i).peaks=points(i).max.x;
         Fdist(i).amp=points(i).max.x-points(i).min.x;

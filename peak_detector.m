@@ -147,7 +147,7 @@ end
 
 nX=size(X,2);
 
-Fdist=repmat( struct('period',0,'APD',0,'PF',0,'amp',[],...
+Fdist=repmat( struct('period',0,'apd',0,'spd',0,'pf',0,'amp',[],...
     'baseline',[],'peaks',[],'maxslope',0,'minslope',0,'pthresh',[]) ,1,nX); %'range',[],'thrUp',[],'thrDown',[]
 
 for i=1:nX
@@ -225,8 +225,9 @@ for i=1:nX
         
         
         Fdist(i).period=diff(points(i).period.t); %period defined from minimum to minimum
-        Fdist(i).APD=points(i).down.t-points(i).up.t;
-        Fdist(i).PF=Fdist(i).APD./Fdist(i).period;
+        Fdist(i).apd=points(i).down.t-points(i).up.t;
+        Fdist(i).spd=Fdist(i).period-Fdist(i).apd;
+        Fdist(i).pf=Fdist(i).apd./Fdist(i).period;
         Fdist(i).amp=amp;
         Fdist(i).baseline=baseline;
         Fdist(i).peaks=points(i).max.x;

@@ -610,7 +610,14 @@ classdef Experiment < handle
                 
                 switch xname
                     case {'t'}
-                        xx=expt.segment(i).points(tix).max.t;
+%                         xx=expt.segment(i).points(tix).max.t;
+%                         xx=expt.segment(i).points(tix).min.t(1:end-1); %first min
+%                         xx=expt.segment(i).points(tix).min.t(2:end); %second min
+%                         xx=expt.segment(i).points(tix).down.t;
+%                         xx=expt.segment(i).points(tix).up.t;
+%                         xx=(expt.segment(i).points(tix).period.t(1:end-1)+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of period
+                        xx=(expt.segment(i).points(tix).down.t+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of silent post active
+%                         xx=(expt.segment(i).points(tix).up.t+expt.segment(i).points(tix).period.t(1:end-1))/2; %midpoint of silent pre active
                         if isscalar(y) %must be a distribution feature
                             error('Only per-trace feature distributions may be plotted vs time')
                         else
