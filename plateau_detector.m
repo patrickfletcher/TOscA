@@ -1,4 +1,4 @@
-function [Fdist,points,results]=plateau_detector(t, X, varargin)
+function [Fdist,points,fcns]=plateau_detector(t, X, varargin)
 %PLATEAU_DETECTOR A plateau detector for oscillating timeseries. Uses Shmitt
 % trigger concept - upward transition threshold >= downward transition
 % threshold. The timeseries is divided into periods measured from upward
@@ -25,9 +25,13 @@ function [Fdist,points,results]=plateau_detector(t, X, varargin)
 %  features - struct containg feature distributions for each column of X
 %  points - struct containing special points, for plotting
 
-%check inputs and parse optional parameters
 
-periodMarker='min';
+%TODO: no inputs => output list of feature names, fcn handles (compute_features+plot), etc?
+
+%TODO: optionally set period marker to other than "up" points?
+% periodMarker='min';
+
+%TODO: option to find maxslope only between up/down. Otherwise anywhere in period.
 
 if isvector(X)
     X=X(:);
@@ -71,13 +75,6 @@ switch lower(threshMethod)
         thrUp=medX + fracUp;
         thrDown=medX - fracDown;
 end
-
-
-%TODO: other possibilities
-% central value +/- fraction of global amp (eg. median +/- 0.05*amp)
-
-%option for dimensional values as thresholds for above methods
-
 
 %TODO: make sure initialization of upstate toggle is robust
 DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
@@ -170,11 +167,11 @@ end
 
 %results struct as output, with attached function handles for computing
 %features and plotting points
-results.points=points;
-results.features=Fdist;
-results.compute=@compute_features;
-results.plot=@plot_data; %simple plot fcn for one trace of interest
-results.plot_interactive=@plot_interactive; %adds keypressfcn to switch traces
+% results.points=points;
+% results.features=Fdist;
+fcns.compute_features=@compute_features;
+fcns.plot_data=@plot_data; %simple plot fcn for one trace of interest
+fcns.plot_interactive=@plot_interactive; %adds keypressfcn to switch traces
 
 %plot to show performance
 if nargout==0||doPlot==1
@@ -182,9 +179,9 @@ if nargout==0||doPlot==1
         plot_interactive(figID,t,X,points)
     else
         if isempty(figID)
-            figID=gcf; %new figure if none available, otherwise current fig
+            gcf; %new figure if none available, otherwise use current fig
         else
-            figID=figure(figID);
+            figure(figID); %bring figID into focus
         end
         plot_data(t,X,points,1)
     end
@@ -211,36 +208,40 @@ for i=1:nX
     points(i).period.x=points(i).up.x;
     points(i).down.x=interp1(t,X(:,i),points(i).down.t);
     
-    nUp=length(points(i).up.t);
-    nT=nUp-1;
+    nPer=length(points(i).up.t)-1;
         
-    if nUp>1
+    if nPer>=1
         
-        for j=1:nT
-            tt=points(i).up.ix(j):points(i).up.ix(j+1)-1;
-            [xmax,imax]=max(X(tt,i));
-            points(i).max.ix(j)=tt(1)+imax-1;
-            points(i).max.t(j)=t(tt(imax));
+        for j=1:nPer
+            ix=points(i).period.ix(j):points(i).period.ix(j+1);
+            tt=t(ix);
+            xx=X(ix,i);
+            dx=DX(ix,i);
+            
+            [xmax,imax]=max(xx);
+            points(i).max.ix(j)=ix(1)+imax-1;
+            points(i).max.t(j)=tt(imax);
             points(i).max.x(j)=xmax;
             
-            [xmin,imin]=min(X(tt,i));
-            points(i).min.ix(j)=tt(1)+imin-1;
-            points(i).min.t(j)=t(tt(imin));
+            [xmin,imin]=min(xx);
+            points(i).min.ix(j)=ix(1)+imin-1;
+            points(i).min.t(j)=tt(imin);
             points(i).min.x(j)=xmin;
             
-            %compute min slope anywhere in the period
-            [dxmin,idxmin]=min(DX(tt,i));
-            points(i).dxmin.ix(j)=tt(1)+idxmin-1;
-            points(i).dxmin.t(j)=t(tt(idxmin));
-            points(i).dxmin.x(j)=X(tt(idxmin),i);
+            [dxmin,idxmin]=min(dx);
+            points(i).dxmin.ix(j)=ix(1)+idxmin-1;
+            points(i).dxmin.t(j)=tt(idxmin);
+            points(i).dxmin.x(j)=xx(idxmin);
             points(i).dxmin.dx(j)=dxmin;
             
-            %compute maxslope only in the active phase?
-            tt=points(i).up.ix(j):points(i).down.ix(j);
-            [dxmax,idxmax]=max(DX(tt,i));
-            points(i).dxmax.ix(j)=tt(1)+idxmax-1;
-            points(i).dxmax.t(j)=t(tt(idxmax));
-            points(i).dxmax.x(j)=X(tt(idxmax),i);
+            %compute maxslope only in the active phase? Not if finding max/min in a different trace than periods
+            ix=points(i).up.ix(j):points(i).down.ix(j);
+            xx=X(ix,i);
+            dx=DX(ix,i);
+            [dxmax,idxmax]=max(dx);
+            points(i).dxmax.ix(j)=ix(1)+idxmax-1;
+            points(i).dxmax.t(j)=tt(idxmax);
+            points(i).dxmax.x(j)=xx(idxmax);
             points(i).dxmax.dx(j)=dxmax;
         end
         
@@ -281,47 +282,27 @@ end
 
 end
 
-function plot_data(t,X,points,tix,showTrace,option)
+function plot_data(t,X,points,tix)
 
-if ~exist('showTrace','var') || isempty(showTrace)
-    showTrace=true;
-end
-if ~exist('option','var') || isempty(option)
-    option='all';
-end
+plot(t,X(:,tix),'k-')
+hold on
 
-if showTrace
-    plot(t,X(:,tix),'k-')
-    axis tight
-end
-
-switch option 
-
-    case {'period'}
-        hold on
-        plot(points(tix).period.t,points(tix).period.x,'bs')
-        hold off
-        
-    case {'all'}
-        hold on
-        plot(points(tix).up.t,points(tix).up.x,'bs')
-        plot(points(tix).down.t,points(tix).down.x,'bo')
-        plot(points(tix).max.t,points(tix).max.x,'rv')
-        plot(points(tix).min.t,points(tix).min.x,'r^')
-        plot(points(tix).dxmax.t,points(tix).dxmax.x,'g>')
-        plot(points(tix).dxmin.t,points(tix).dxmin.x,'g<')
-        % plot(xlim(),thrUp(tix)*[1,1],'r--')
-        % if thrUp~=thrDown
-        %     plot(xlim(),thrDown(tix)*[1,1],'b--')
-        % end
-        hold off
-        
-    otherwise
-        
-end
+plot(points(tix).up.t,points(tix).up.x,'bs')
+plot(points(tix).down.t,points(tix).down.x,'bo')
+plot(points(tix).max.t,points(tix).max.x,'rv')
+plot(points(tix).min.t,points(tix).min.x,'r^')
+plot(points(tix).dxmax.t,points(tix).dxmax.x,'g>')
+plot(points(tix).dxmin.t,points(tix).dxmin.x,'g<')
+% plot(xlim(),thrUp(tix)*[1,1],'r--')
+% if thrUp~=thrDown
+%     plot(xlim(),thrDown(tix)*[1,1],'b--')
+% end
+plot(points(tix).period.t,points(tix).period.x,'bs')
+hold off
 
 xlabel('t')
 ylabel('x')
+axis tight
 YLIM=ylim();
 ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
 end
@@ -351,14 +332,13 @@ switch(event.Key)
     case {'leftarrow'}
         if tix>1
             tix=tix-1;
-            plot_data(t,X,points,tix)
         end
     case {'rightarrow'}
         if tix<nX
             tix=tix+1;
-            plot_data(t,X,points,tix)
         end
 end
+plot_data(t,X,points,tix)
 src.UserData.tix=tix;
 end
 

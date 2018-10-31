@@ -19,7 +19,7 @@ classdef Experiment < handle
         
         %segment is a subinterval of the trace, the basic unit within which
         %periodicity will be detected and features will be computed
-        segment=struct('name','','endpoints',[],'ix',[],'points',struct(),'features',struct(),'plot',@NOP)
+        segment=struct('name','','endpoints',[],'ix',[],'points',struct(),'features',struct())
         nS
         
         %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
@@ -78,10 +78,10 @@ classdef Experiment < handle
         
         interpMethod='linear'
         
-        thrFrac=[0.55,0.45]
-        delta=0.25
-        Tbig=15
-        Tsmall=4
+%         thrFrac=[0.55,0.45]
+%         delta=0.25
+%         Tbig=15
+%         Tsmall=4
         
         %keep track of which trace is in focus for plotting - no, this should be a property of the figure
 %         tix=1;
@@ -390,12 +390,12 @@ classdef Experiment < handle
                     case {'peaks'}
                         delta=varargin{1};
                         if length(varargin)>1, extras=varargin(2:end); end
-                        [~, ~, result]=peak_detector(tt,xx,delta,extras{:});
+                        [features, points, ~]=peak_detector(tt,xx,delta,extras{:});
 
                     case {'threshold'}
                         frac=varargin{1};
                         if length(varargin)>1, extras=varargin(2:end); end
-                        [~, ~, result]=plateau_detector(tt,xx,frac,extras{:});
+                        [features, points, ~]=plateau_detector(tt,xx,frac,extras{:});
                 end
                 
                 %also get xvalues for all X types
@@ -420,10 +420,10 @@ classdef Experiment < handle
 %                 [feats.Amean]=Amean{:};
 %                 [feats.Astd]=Astd{:};
                 
-                expt.segment(i).points=result.points;
-                expt.segment(i).features=result.features;
-                expt.segment(i).plot=result.plot;
-                expt.segment(i).compute=result.compute;
+                expt.segment(i).points=points;
+                expt.segment(i).features=features;
+%                 expt.segment(i).plot_data=fcns.plot_data;
+%                 expt.segment(i).compute_features=fcns.compute_features;
             end
 %             expt.fnames=fieldnames(feats)';
         end
