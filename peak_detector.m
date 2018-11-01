@@ -264,8 +264,8 @@ end
 fnames=fieldnames(Fdist);
 
 for i=1:length(fnames)
-    F.(fnames{i}).mean=mean(Fdist.(fnames{i}));
-    F.(fnames{i}).stdev=std(Fdist.(fnames{i}));
+    F.([fnames{i},'_mean'])=mean(Fdist.(fnames{i}));
+    F.([fnames{i},'_stdev'])=std(Fdist.(fnames{i}));
 end
 
 end

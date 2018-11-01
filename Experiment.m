@@ -20,7 +20,7 @@ classdef Experiment < handle
         %segment is a subinterval of the trace, the basic unit within which
         %periodicity will be detected and features will be computed
         segment=struct('name','','endpoints',[],'ix',[],...
-            'points',struct(),'features',struct(),'featureDists',struct())
+            'points',struct(),'features_periods',struct(),'features_trace',struct())
         nS
         
         %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
@@ -45,7 +45,8 @@ classdef Experiment < handle
         nX
         
         featureFcn
-        fnames
+        fnames_periods
+        fnames_trace
         
         fs %1/dt
         f
@@ -224,8 +225,11 @@ classdef Experiment < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Preprocessing functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %TODO: forced order?
-        %TODO: per-interval, or whole trace option (eg. linear detrend per interval)
+        %TODO: forced order, but flags to choose which steps (if any) to apply?
+        %     - alt: arbitrary list of operations, with fully qualified options.
+        %TODO: per-interval, or whole trace options (eg. linear detrend per interval)
+        %TODO: single preprocessing convenience function. how to handle all the options+params? 
+        
         function normalize(expt,method,methodPar,doPlot)
             expt.Xnorm=normalizeTraces(expt.t,expt.X,method,methodPar,doPlot);
             expt.normMethod=method;
@@ -284,10 +288,13 @@ classdef Experiment < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Analysis functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %TODO expand this - detect_periods return only points/fcns, then compute_features should apply fcn to relevant
+        %traces.
         function compute_features(expt,method,varargin)
             expt.detect_periods(method,varargin{:});
             expt.periodogram();
-            expt.fnames=fieldnames(expt.segment(1).features)';
+            expt.fnames_periods=fieldnames(expt.segment(1).features_periods)';
+            expt.fnames_trace=fieldnames(expt.segment(1).features_trace)';
             expt.featureMethod=method;
             expt.featureParam=varargin; %methodpar should be varargin?
         end
@@ -297,7 +304,7 @@ classdef Experiment < handle
         % Plotting functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        function plotTrace(expt,ax,whichPlot,tix,showPts)
+        function plotTrace(expt,whichPlot,tix,showPts)
             %dispatch function for plotting expt data
                         
             if ~exist('showPts','var')||isempty(showPts)
@@ -311,15 +318,12 @@ classdef Experiment < handle
                 figID.KeyPressFcn={@expt.traceKeypress,whichPlot};
                 figID.UserData=tix; %store the current trace ID with figure
             end
-            if isempty(ax)
-                ax=gca;
-            end
             
-            expt.plot_t(ax,whichPlot,tix,showPts)
+            expt.plot_t(whichPlot,tix,showPts)
             
         end
         
-        function plotPeriodogram(expt,ax,tix)
+        function plotPeriodogram(expt,tix)
             %overlay psd for each segment
             if ~isempty(expt.psd)
                        
@@ -329,43 +333,68 @@ classdef Experiment < handle
                 figID.KeyPressFcn=@expt.psdKeypress;
                 figID.UserData=tix; %store the current trace ID with figure
             end
-            if isempty(ax)
-                ax=gca;
-            end
             
-            expt.plot_psd(ax,tix);
+            expt.plot_psd(tix);
             
             end
         end
         
-        function plotFeatures(expt,ax,xname,yname,tix)
-            %xname={t,segment,fnames}
-            %yname={fnames}
+        function plotFeatures(expt,featureType,xname,yname,tix)
+            %TODO: how to manage plotting options?
                 
-            if ~isempty(expt.segment(1).features)
-                
-            if isempty(ax)
-                ax=gca;
-            end
-            
+%             if ~isempty(expt.segment(1).features)
+                            
             if isempty(xname)
                 xname='segment';
             end
-            
-            xname=validatestring(xname,['t','segment',expt.fnames]);
-            yname=validatestring(yname,expt.fnames);
             
             if ~exist('tix','var')||isempty(tix)
                 tix=1;
                 figID=gcf; %newfig?
                 figID.KeyPressFcn={@expt.featureKeypress,xname,yname};
                 figID.UserData=tix; %store the current trace ID with figure
-                ax=gca;
             end
             
-            expt.plot_features(ax,xname,yname,tix);
-            
+            switch featureType
+                case 'periods'
+                    xname=validatestring(xname,['t','segment',expt.fnames_periods]);
+                    yname=validatestring(yname,expt.fnames_periods);
+                    hl=expt.plot_features_periods(xname,yname,tix);
+                case 'trace'
+                    xname=validatestring(xname,['t','segment',expt.fnames_trace]);
+                    yname=validatestring(yname,expt.fnames_trace);
+                    hl=expt.plot_features_trace(xname,yname,tix);
             end
+            
+            axis tight
+            YLIM=ylim();
+            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+            
+            switch xname
+                    case {'t'}
+                        xlabel('t')
+                        for i=1:expt.nS
+                            hl(i).LineStyle='-';
+                        end
+                        hold on
+                        for i=2:expt.nS
+                            plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                        end
+                        hold off
+                        
+                    case {'segment'} %TODO: do jitter here?
+                        xticks(1:expt.nS)
+                        xticklabels({expt.segment.name})
+                        xlim([0.5,expt.nS+0.5])
+                        xlabel('segment')
+                        
+                otherwise
+                        xlabel(xname)
+            end
+            
+            ylabel(yname)
+            
+%             end
         end
         
         %save results. If required metadata is not set, force user to enter it now
@@ -400,11 +429,10 @@ classdef Experiment < handle
                 end
                 
                 expt.segment(i).points=points;
-                expt.segment(i).features=F;
-                expt.segment(i).featureDists=Fdist;
+                expt.segment(i).features_periods=Fdist;
+                expt.segment(i).features_trace=F;
             end
             expt.featureFcn=fcns.compute_features;
-%             expt.fnames=fieldnames(feats)';
         end
         
         function periodogram(expt)
@@ -418,12 +446,11 @@ classdef Experiment < handle
                 Tpsd=num2cell(Tpsd);
                 fmax=num2cell(fmax);
                 Pmax=num2cell(Pmax);
-                [expt.segment(i).features.Tpsd]=Tpsd{:};
-                [expt.segment(i).features.fmax]=fmax{:};
-                [expt.segment(i).features.Pmax]=Pmax{:};
+                [expt.segment(i).features_trace.Tpsd]=Tpsd{:};
+                [expt.segment(i).features_trace.fmax]=fmax{:};
+                [expt.segment(i).features_trace.Pmax]=Pmax{:};
             end
-            expt.f=F;
-%             expt.fnames=fieldnames(expt.features{i})'; 
+            expt.f=F; %frquency vector
         end
         
         
@@ -431,7 +458,7 @@ classdef Experiment < handle
         % Plotting functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        function plot_t(expt,ax,whichPlot,tix,showPts)
+        function plot_t(expt,whichPlot,tix,showPts)
             
             %BUG: matlab errors when mousing over data. datatips?? super
             %annoying
@@ -536,7 +563,7 @@ classdef Experiment < handle
             hold off
         end
         
-        function plot_psd(expt,ax,tix)
+        function plot_psd(expt,tix)
             
 %             axes(ax)
             cla
@@ -559,163 +586,139 @@ classdef Experiment < handle
             hold off
         end
         
-        function plot_features(expt,ax,xname,yname,tix)
+        function hl=plot_features_periods(expt,xname,yname,tix)
             
-%             axes(ax)
             cla
             hold on;
             
-            
-            %x,y - highlight point for scalar features
-            %xx,yy - distribution of features (either across all traces for scalar features, or distribution within a
-            %trace for feature distributions)
-            
-            xJitter=0.05;
+            xJitter=0.05; %make this a property of the class?
            
-            HX=[];HY=[];
-            XX={};YY={};
-            
-            
-            scalarFeatures=false;
-            colorBySegment=false;
+            XX=cell(1,expt.nS);
+            YY=cell(1,expt.nS);
+            colorBySegment=false;  %TODO: always color by segment?
             for i=1:expt.nS
                         
-                %TODO: more robust way? what if that particular trace had 1 or 0 periods detected
-                x=[];
-                y=expt.segment(i).features(tix).(yname);
+                y=expt.segment(i).features_periods(tix).(yname);
                 if isempty(y)
                     return
                 end
                 
                 switch xname
                     case {'t'}
-%                         xx=expt.segment(i).points(tix).max.t;
-%                         xx=expt.segment(i).points(tix).min.t(1:end-1); %first min
-%                         xx=expt.segment(i).points(tix).min.t(2:end); %second min
-%                         xx=expt.segment(i).points(tix).down.t;
-%                         xx=expt.segment(i).points(tix).up.t;
-%                         xx=(expt.segment(i).points(tix).period.t(1:end-1)+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of period
-                        xx=(expt.segment(i).points(tix).down.t+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of silent post active
-%                         xx=(expt.segment(i).points(tix).up.t+expt.segment(i).points(tix).period.t(1:end-1))/2; %midpoint of silent pre active
-                        if isscalar(y) %must be a distribution feature
-                            error('Only per-trace feature distributions may be plotted vs time')
-                        else
-                            yy=y;
-                        end
-                        
+                        %TODO: option for marker location?
+                         x=(expt.segment(i).points(tix).period.t(1:end-1)+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of period
+%                         x=expt.segment(i).points(tix).max.t;
+%                         x=expt.segment(i).points(tix).min.t(1:end-1); %first min
+%                         x=expt.segment(i).points(tix).min.t(2:end); %second min
+%                         x=expt.segment(i).points(tix).down.t;
+%                         x=expt.segment(i).points(tix).up.t;
+%                         x=(expt.segment(i).points(tix).down.t+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of silent post active
+%                         x=(expt.segment(i).points(tix).up.t+expt.segment(i).points(tix).period.t(1:end-1))/2; %midpoint of silent pre active   
                         
                     case {'segment'}
-                        if isscalar(y) %plot all trace data as line seg, highlight point tix
-%                             xx=i+xJitter*randn(1,expt.nX);
-                            xx=i*ones(1,expt.nX);
-                            yy=[expt.segment(i).features.(yname)];
-                            scalarFeatures=true;
-                            HX(end+1,1)=i;
-                            HY=[HY;y(:)];
-                        else
-                            xx=i+xJitter*randn(1,length(y));
-                            yy=y;
-                        end
-                        
+                        %TODO: option for violin plot, boxplot?
+                        x=i+xJitter*randn(1,length(y));
 
                     case expt.fnames
                         x=expt.segment(i).features(tix).(xname);
-                        
-                        if isscalar(x) %plot all trace data, highlight point tix
-                            if isscalar(y) %plot all trace data, highlight point tix
-                                xx=[expt.segment(i).features.(xname)];
-                                yy=[expt.segment(i).features.(yname)];
-                                scalarFeatures=true;
-                                HX=[HX;x(:)];
-                                HY=[HY;y(:)];
-                            else
-                                error('x and y feature type must match')
-                            end
-                        else
-                            if isscalar(y) %plot all trace data, highlight point tix
-                                error('x and y feature type must match')
-                            else
-                                xx=x;
-                                yy=y;
-                                colorBySegment=true;
-                            end
-                        end
+                        colorBySegment=true;
 
                     otherwise
                         error(['Invalid name for x-axis: ' xname])
                 end
                 
-                XX=[XX;{xx}];
-                YY=[YY;{yy}];
+                XX{i}=x;
+                YY{i}=y;
 
             end
                             
-            if scalarFeatures
-                
-                XX=cell2mat(XX);
-                YY=cell2mat(YY);
-                
-                if expt.nS>1
-                    plot(XX,YY,'-','color',[0.5,0.5,0.5])
-                    plot(HX,HY,'k-','linewidth',1.5)
-                end
-                
-                h2=plot(XX',YY','o');
-                for i=1:expt.nS
-                    h4=plot(HX(i),HY(i),'o');
-                    h4.Color=h2(i).Color;
-                    h4.MarkerFaceColor=h2(i).Color;
-                end
-                if expt.nS>1
-                    legend(h2,{expt.segment.name})
-                end
+            for i=1:expt.nS
+                hl(i)=plot(XX{i},YY{i},'o');
+            end
+            if colorBySegment
+                legend(hl,{expt.segment.name}) %TODO: option to suppress legend?
             else
                 for i=1:expt.nS
-                    hl(i)=plot(XX{i},YY{i},'o');
-                end
-                if colorBySegment
-                    legend(hl,{expt.segment.name})
-                else
-                    for i=1:expt.nS
-                        hl(i).Color='k';
-                    end
+                    hl(i).Color='k';
                 end
             end
-            
-            axis tight
-            YLIM=ylim();
-            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
-            
-            switch xname
-                    case {'t'}
-                        xlabel('t')
-                        for i=1:expt.nS
-                            hl(i).LineStyle='-';
-                        end
-                        
-                        for i=2:expt.nS
-                            plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
-                        end
-                        
-                    case {'segment'}
-                        xticks(1:expt.nS)
-                        xticklabels({expt.segment.name})
-                        xlim([0.5,expt.nS+0.5])
-                        xlabel('segment')
-                        
-                    case expt.fnames
-                        xlabel(xname)
-            end
-            
-            ylabel(yname)
             
             hold off
             
         end
         
+        function hl=plot_features_trace(expt,xname,yname,tix)
+            
+%             axes(ax)
+            cla
+            hold on;
+            
+            xJitter=0.05;
+           
+            HX=[];
+            HY=[];
+            XX=[];
+            YY=[];
+            
+            colorBySegment=false;
+            for i=1:expt.nS
+                
+                switch xname
+                        
+                    case {'segment'}
+                        %plot all trace data as line seg, highlight point tix
+%                         xx=i+xJitter*randn(1,expt.nX);
+                        xx=i*ones(1,expt.nX);
+                        yy=[expt.segment(i).features_trace.(yname)];
+                        HX(end+1,1)=i;
+                        HY(end+1,1)=yy(tix);
+                        
+
+                    case expt.fnames_trace
+                        xx=[expt.segment(i).features_trace.(xname)];
+                        yy=[expt.segment(i).features_trace.(yname)];
+                        colorBySegment=true;
+                        HX(end+1,1)=xx(tix);
+                        HY(end+1,1)=yy(tix);
+
+                    otherwise
+                        error(['Invalid name for x-axis: ' xname])
+                end
+                
+                XX(end+1,:)=xx;
+                YY(end+1,:)=yy;
+
+            end
+            
+            %line segment below markers:
+            hlAll=[];
+            hlTix=[];
+            if expt.nS>1
+                hlAll=plot(XX,YY,'-','color',[0.5,0.5,0.5]);
+                hlTix=plot(HX,HY,'k-','linewidth',1.5);
+            end
+            
+            %markers
+            hmAll=plot(XX',YY','o');
+            for i=1:expt.nS
+                hmTix(i)=plot(HX(i),HY(i),'o');
+                hmTix(i).Color=hmAll(i).Color;
+                hmTix(i).MarkerFaceColor=hmAll(i).Color;
+            end
+            if expt.nS>1
+                legend(hmAll,{expt.segment.name})
+            end
+            
+            hold off
+            
+            hl.hlAll=hlAll;
+            hl.hlTix=hlTix;
+            hl.hmAll=hmAll;
+            hl.hmTix=hmTix;
+        end
+        
         function traceKeypress(expt,src,event,whichPlot,showPts)
             tix=src.UserData;
-            ax=gca;
             switch(event.Key)
                 case {'leftarrow'}
                     if tix>1
@@ -726,13 +729,12 @@ classdef Experiment < handle
                         tix=tix+1;
                     end
             end
-            expt.plot_t(ax,whichPlot,tix,showPts)
+            expt.plot_t(whichPlot,tix,showPts)
             src.UserData=tix;
         end
         
         function psdKeypress(expt,src,event)
             tix=src.UserData;
-            ax=gca;
             switch(event.Key)
                 case {'leftarrow'}
                     if tix>1
@@ -743,13 +745,12 @@ classdef Experiment < handle
                         tix=tix+1;
                     end
             end
-            expt.plot_psd(ax,tix)
+            expt.plot_psd(tix)
             src.UserData=tix;
         end
         
         function featureKeypress(expt,src,event,xname,yname)
             tix=src.UserData;
-            ax=gca;
             switch(event.Key)
                 case {'leftarrow'}
                     if tix>1
@@ -760,7 +761,7 @@ classdef Experiment < handle
                         tix=tix+1;
                     end
             end
-            expt.plot_features(ax,xname,yname,tix);
+            expt.plot_features(xname,yname,tix);
             src.UserData=tix;
         end
     end
