@@ -27,6 +27,12 @@ function [Fdist,points,fcns]=peak_detector(t, X, varargin)
 %check inputs and parse optional parameters
 % [thrPtiles,delta,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
+%TODO: input name-value support
+%TODO: verify best initialization of maxIsNext toggle
+%TODO: interpolate peaks/troughs?
+%TODO: noise-robust method for numerical slope
+%TODO: scalar feature summary output
+
 if isvector(X)
     X=X(:);
 end
@@ -34,7 +40,8 @@ end
 [delta,platThresh,minAmp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
-dt=t(2)-t(1); %TODO: plateau features assume DT is constant!
+
+DX=slopeY(t,X); 
 
 thrPtiles=[0,100];
 globalXmin=prctile(X,thrPtiles(1),1);
@@ -48,13 +55,12 @@ if deltaIsFraction
     delta=delta*globalXamp;
 end
 
-% hold off; plot(t,X); hold on
-DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
-
 pt=struct('ix',[],'t',[],'x',[],'dx',[]);
 
 points=repmat(struct('period',pt,'up',pt,'down',pt,...
     'max',pt,'min',pt,'dxmax',pt,'dxmin',pt),1,nX);
+
+%initialization of maxIsNext toggle
 % maxIsNext=zeros(1,nX); %look for a minimum first (often calls first point
 maxIsNext=ones(1,nX); %look for a maximum first (most reliable, but appears to miss some cases)
 

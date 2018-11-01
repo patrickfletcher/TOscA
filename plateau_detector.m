@@ -28,10 +28,21 @@ function [Fdist,points,fcns]=plateau_detector(t, X, varargin)
 
 %TODO: no inputs => output list of feature names, fcn handles (compute_features+plot), etc?
 
-%TODO: optionally set period marker to other than "up" points?
-% periodMarker='min';
+%TODO: optionally set period marker to other than "up" points? eg. periodMarker='min';
 
-%TODO: option to find maxslope only between up/down. Otherwise anywhere in period.
+%TODO: make sure initialization of upstate toggle is robust
+
+%TODO: add slope thresholds as option (good for voltage?)
+%TODO: noise-robust method for numerical slope
+
+%TODO: option to find maxslope only between up/down. Otherwise anywhere in period. only weird because slope not zero at
+%up transition; min-min period avoids this.
+
+%TODO: scalar feature summary output
+
+%TODO: per-period feature idea 
+%       - phase of special point within current period (eg. phase of max V1 relative to period detected in V2)
+
 
 if isvector(X)
     X=X(:);
@@ -40,6 +51,8 @@ end
 [thrPtiles,fracUp,fracDown,minAmp,threshMethod,doInterp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
 nX=size(X,2); %number of traces
+
+DX=slopeY(t,X); 
 
 globalXmin=prctile(X,thrPtiles(1),1);
 globalXmax=prctile(X,thrPtiles(2),1);
@@ -76,8 +89,6 @@ switch lower(threshMethod)
         thrDown=medX - fracDown;
 end
 
-%TODO: make sure initialization of upstate toggle is robust
-DX=slopeY(t,X); %todo: noise-robust method; measure between tmin(i) and tmin(i+1)?
 % isUp=ones(1,nX); %forces first point to be downward transition
 % isUp=zeros(1,nX); %forces first point to be upward transition
 isUp=X(1,:)>thrUp;
@@ -160,15 +171,11 @@ for i=1:nX
     end
 end
 
-%compute the extra points and features per period
+%compute the extra points and features - per-period distributions
 [Fdist,points]=compute_features(t,X,points,DX);
 
-%summarize features (mean+std?)
+%summarize features (mean+std?) - scalar descriptors per trace
 
-%results struct as output, with attached function handles for computing
-%features and plotting points
-% results.points=points;
-% results.features=Fdist;
 fcns.compute_features=@compute_features;
 fcns.plot_data=@plot_data; %simple plot fcn for one trace of interest
 fcns.plot_interactive=@plot_interactive; %adds keypressfcn to switch traces
@@ -213,7 +220,6 @@ for i=1:nX
     if nPer>=1
         
         for j=1:nPer
-%             ix=points(i).period.ix(j):points(i).period.ix(j+1);
             ix=find(t>=points(i).period.t(j) & t<=points(i).period.t(j+1));
             tt=t(ix);
             xx=X(ix,i);
@@ -236,7 +242,6 @@ for i=1:nX
             points(i).dxmin.dx(j)=dxmin;
             
             %compute maxslope only in the active phase? Not if finding max/min in a different trace than periods
-%             ix=points(i).up.ix(j):points(i).down.ix(j);
             ix=find(t>=points(i).up.t(j) & t<=points(i).down.t(j));
             xx=X(ix,i);
             dx=DX(ix,i);
