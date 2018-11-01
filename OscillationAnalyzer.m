@@ -2,6 +2,7 @@ classdef OscillationAnalyzer<handle
     %OscillationAnalyzer is a graphical interface for performing
     %processing and feature extraction on timeseries data.
     
+    %TODO: when changing feature plot, do a reset on those axes
     
     %data and processing properties
     properties
@@ -22,7 +23,7 @@ classdef OscillationAnalyzer<handle
         Tbig=15
         Tsmall=4
         
-        fnames
+        featurePlotType='periods' %switch for periods vs trace featureplot
         xfeat
         yfeat
         
@@ -156,13 +157,13 @@ classdef OscillationAnalyzer<handle
             %this function manages which axes are being plotted into
 %             tic
             app.hFig.CurrentAxes=app.axRaw;
-            app.expt.plotTrace([],'raw',app.tix,app.showPts)
+            app.expt.plotTrace('raw',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axNorm;
-            app.expt.plotTrace([],'norm',app.tix,app.showPts)
+            app.expt.plotTrace('norm',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axDT;
-            app.expt.plotTrace([],'detrend',app.tix,app.showPts)
+            app.expt.plotTrace('detrend',app.tix,app.showPts)
             app.hFig.CurrentAxes=app.axFilt;
-            app.expt.plotTrace([],'filt',app.tix,app.showPts)
+            app.expt.plotTrace('filt',app.tix,app.showPts)
             
             set([app.axRaw,app.axNorm,app.axDT],'Xticklabel','');
 %             toc
@@ -170,12 +171,12 @@ classdef OscillationAnalyzer<handle
             
 %             tic
             app.hFig.CurrentAxes=app.axPSD;
-            app.expt.plotPeriodogram(app.axPSD,app.tix)
+            app.expt.plotPeriodogram(app.tix)
 %             toc
             
 %             tic
             app.hFig.CurrentAxes=app.axFeat;
-            app.expt.plotFeatures(app.axFeat,app.xfeat,app.yfeat,app.tix)
+            app.expt.plotFeatures(app.featurePlotType,app.xfeat,app.yfeat,app.tix)
 %             toc
         end
         

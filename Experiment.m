@@ -631,7 +631,10 @@ classdef Experiment < handle
                 YY{i}=y;
 
             end
-                            
+                          
+            
+            ax=gca;
+            ax.ColorOrderIndex=1;  
             for i=1:expt.nS
                 hl(i)=plot(XX{i},YY{i},'o');
             end
@@ -699,6 +702,9 @@ classdef Experiment < handle
             end
             
             %markers
+            
+            ax=gca;
+            ax.ColorOrderIndex=1;
             hmAll=plot(XX',YY','o');
             for i=1:expt.nS
                 hmTix(i)=plot(HX(i),HY(i),'o');
