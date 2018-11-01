@@ -1,4 +1,4 @@
-function [Fdist,points,fcns]=peak_detector(t, X, varargin)
+function [F,Fdist,points,fcns]=peak_detector(t, X, varargin)
 %PEAK_DETECTOR A peak detector for oscillating timeseries. The timeseries is divided into periods measured between
 %successive minima. Amplitude and time window sizes can be set to select scale of peaks.
 %
@@ -123,7 +123,7 @@ for i=1:nX
 end
 
 %compute the extra points and features per period
-[Fdist,points]=compute_features(t,X,points,platThresh,DX);
+[F,Fdist,points]=compute_features(t,X,points,platThresh,DX);
 
 fcns.compute_features=@compute_features;
 fcns.plot_data=@plot_data; %simple plot fcn for one trace of interest
@@ -145,7 +145,7 @@ end
 
 end
 
-function [Fdist,points]=compute_features(t,X,points,platThresh,DX)
+function [F,Fdist,points]=compute_features(t,X,points,platThresh,DX)
 
 if ~exist('DX','var')
     DX=slopeY(t,X);
@@ -258,6 +258,14 @@ for i=1:nX
             Fdist(i).minslope=points(i).dxmin.dx;
         end
     end
+end
+
+%compute summary statistics of feature distributions
+fnames=fieldnames(Fdist);
+
+for i=1:length(fnames)
+    F.(fnames{i}).mean=mean(Fdist.(fnames{i}));
+    F.(fnames{i}).stdev=std(Fdist.(fnames{i}));
 end
 
 end

@@ -19,7 +19,8 @@ classdef Experiment < handle
         
         %segment is a subinterval of the trace, the basic unit within which
         %periodicity will be detected and features will be computed
-        segment=struct('name','','endpoints',[],'ix',[],'points',struct(),'features',struct())
+        segment=struct('name','','endpoints',[],'ix',[],...
+            'points',struct(),'features',struct(),'featureDists',struct())
         nS
         
         %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
@@ -43,7 +44,7 @@ classdef Experiment < handle
         include %set element to zero to exclude a trace; X(:,include)
         nX
         
-        
+        featureFcn
         fnames
         
         fs %1/dt
@@ -390,41 +391,19 @@ classdef Experiment < handle
                     case {'peaks'}
                         delta=varargin{1};
                         if length(varargin)>1, extras=varargin(2:end); end
-                        [features, points, ~]=peak_detector(tt,xx,delta,extras{:});
+                        [F, Fdist, points, fcns]=peak_detector(tt,xx,delta,extras{:});
 
                     case {'threshold'}
                         frac=varargin{1};
                         if length(varargin)>1, extras=varargin(2:end); end
-                        [features, points, ~]=plateau_detector(tt,xx,frac,extras{:});
+                        [F, Fdist, points, fcns]=plateau_detector(tt,xx,frac,extras{:});
                 end
                 
-                %also get xvalues for all X types
-                %independently max/min per period for non-filt traces (detrend at least)
-                
-                %get average features per segment per trace
-%                 Tmean=arrayfun(@(x)mean(x.period),feats); Tmean=num2cell(Tmean);
-%                 Tstd=arrayfun(@(x)std(x.period),feats); Tstd=num2cell(Tstd);
-%                 APDmean=arrayfun(@(x)mean(x.APD),feats); APDmean=num2cell(APDmean);
-%                 APDstd=arrayfun(@(x)std(x.APD),feats); APDstd=num2cell(APDstd);
-%                 PFmean=arrayfun(@(x)mean(x.PF),feats); PFmean=num2cell(PFmean);
-%                 PFstd=arrayfun(@(x)std(x.PF),feats); PFstd=num2cell(PFstd);
-%                 Amean=arrayfun(@(x)mean(x.amp),feats); Amean=num2cell(Amean);
-%                 Astd=arrayfun(@(x)std(x.amp),feats); Astd=num2cell(Astd);
-%                 
-%                 [feats.Tmean]=Tmean{:};
-%                 [feats.Tstd]=Tstd{:};
-%                 [feats.APDmean]=APDmean{:};
-%                 [feats.APDstd]=APDstd{:};
-%                 [feats.PFmean]=PFmean{:};
-%                 [feats.PFstd]=PFstd{:};
-%                 [feats.Amean]=Amean{:};
-%                 [feats.Astd]=Astd{:};
-                
                 expt.segment(i).points=points;
-                expt.segment(i).features=features;
-%                 expt.segment(i).plot_data=fcns.plot_data;
-%                 expt.segment(i).compute_features=fcns.compute_features;
+                expt.segment(i).features=F;
+                expt.segment(i).featureDists=Fdist;
             end
+            expt.featureFcn=fcns.compute_features;
 %             expt.fnames=fieldnames(feats)';
         end
         

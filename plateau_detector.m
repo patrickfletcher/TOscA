@@ -1,4 +1,4 @@
-function [Fdist,points,fcns]=plateau_detector(t, X, varargin)
+function [F,Fdist,points,fcns]=plateau_detector(t, X, varargin)
 %PLATEAU_DETECTOR A plateau detector for oscillating timeseries. Uses Shmitt
 % trigger concept - upward transition threshold >= downward transition
 % threshold. The timeseries is divided into periods measured from upward
@@ -172,9 +172,7 @@ for i=1:nX
 end
 
 %compute the extra points and features - per-period distributions
-[Fdist,points]=compute_features(t,X,points,DX);
-
-%summarize features (mean+std?) - scalar descriptors per trace
+[F,Fdist,points]=compute_features(t,X,points,DX);
 
 fcns.compute_features=@compute_features;
 fcns.plot_data=@plot_data; %simple plot fcn for one trace of interest
@@ -197,7 +195,7 @@ end
 end
 
 %up/down times are retained, all other points/features computed from those
-function [Fdist,points]=compute_features(t,X,points,DX)
+function [F,Fdist,points]=compute_features(t,X,points,DX)
 
 if ~exist('DX','var')
     DX=slopeY(t,X);
@@ -286,6 +284,14 @@ for i=1:nX
             Fdist(i).minslope=points(i).dxmin.dx;
         end
     end
+end
+
+%compute summary statistics of feature distributions
+fnames=fieldnames(Fdist);
+
+for i=1:length(fnames)
+    F.(fnames{i}).mean=mean(Fdist.(fnames{i}));
+    F.(fnames{i}).stdev=std(Fdist.(fnames{i}));
 end
 
 end
