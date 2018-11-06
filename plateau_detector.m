@@ -158,6 +158,7 @@ for i=1:nX
     points(i).period.t=points(i).up.t;
     points(i).period.x=points(i).up.x;
     
+    if ~isempty(points(i).down.t) && ~isempty(points(i).up.t)
     % trim away down transitions outside first/last up transitions
     if points(i).down.t(1)<=points(i).up.t(1)
         points(i).down.ix=points(i).down.ix(2:end);
@@ -168,6 +169,8 @@ for i=1:nX
         points(i).down.ix=points(i).down.ix(1:end-1);
         points(i).down.t=points(i).down.t(1:end-1);
         points(i).down.x=points(i).down.x(1:end-1);
+    end
+    
     end
 end
 

@@ -339,7 +339,7 @@ classdef Experiment < handle
             end
         end
         
-        function plotFeatures(expt,featureType,xname,yname,tix)
+        function hl=plotFeatures(expt,featureType,xname,yname,tix)
             %TODO: how to manage plotting options?
                 
 %             if ~isempty(expt.segment(1).features)
@@ -374,13 +374,16 @@ classdef Experiment < handle
                     case {'t'}
                         xlabel('t')
                         for i=1:expt.nS
+                            if strcmpi(class(hl(i)),'matlab.graphics.chart.primitive.Line')
                             hl(i).LineStyle='-';
+                            end
                         end
                         hold on
                         for i=2:expt.nS
                             plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
                         end
                         hold off
+                        xlim([expt.t(1),expt.t(end)])
                         
                     case {'segment'} %TODO: do jitter here?
                         xticks(1:expt.nS)
@@ -627,6 +630,10 @@ classdef Experiment < handle
                         error(['Invalid name for x-axis: ' xname])
                 end
                 
+                if isempty(x)
+                    y=[];
+                end
+                
                 XX{i}=x;
                 YY{i}=y;
 
@@ -636,13 +643,17 @@ classdef Experiment < handle
             ax=gca;
             ax.ColorOrderIndex=1;  
             for i=1:expt.nS
-                hl(i)=plot(XX{i},YY{i},'o');
+                if ~isempty(XX{i})
+                    hl(i)=plot(XX{i},YY{i},'o');
+                end
             end
             if colorBySegment
                 legend(hl,{expt.segment.name}) %TODO: option to suppress legend?
             else
                 for i=1:expt.nS
-                    hl(i).Color='k';
+                    if ~isempty(XX{i})
+                        hl(i).Color='k';
+                    end
                 end
             end
             

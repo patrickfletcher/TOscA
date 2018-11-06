@@ -109,6 +109,7 @@ for i=1:nX
     points(i).period.t=points(i).min.t;
     points(i).period.x=points(i).min.x;
     
+    if ~isempty(points(i).max.t) && ~isempty(points(i).min.t)
     %trim leading and trailing maxima
     if  points(i).max.t(1)<points(i).min.t(1)
         points(i).max.ix=points(i).max.ix(2:end);
@@ -119,6 +120,8 @@ for i=1:nX
         points(i).max.ix=points(i).max.ix(1:end-1);
         points(i).max.t=points(i).max.t(1:end-1);
         points(i).max.x=points(i).max.x(1:end-1);
+    end
+    
     end
 end
 
