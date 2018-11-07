@@ -642,9 +642,10 @@ classdef Experiment < handle
             
             ax=gca;
             ax.ColorOrderIndex=1;  
+            hl=matlab.graphics.chart.primitive.Line.empty(expt.nS,0);
             for i=1:expt.nS
                 if ~isempty(XX{i})
-                    hl(i)=plot(XX{i},YY{i},'o');
+                    hl(i,1)=plot(XX{i},YY{i},'o');
                 end
             end
             if colorBySegment
