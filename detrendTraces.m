@@ -1,4 +1,7 @@
 function [Xdetrend,XTrend]=detrendTraces(t,X,method,methodparam,doPlot)
+% DETRENDTRACES detrend the columns of X using various methods
+
+% TODO: finish error checking, documentation
 
 % TODO: no inputs - return cell array of possible methods with their possible params
 %  {{method},{methodpar}}

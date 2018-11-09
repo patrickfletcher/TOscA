@@ -231,6 +231,10 @@ classdef Experiment < handle
         %TODO: single preprocessing convenience function. how to handle all the options+params? 
         
         function normalize(expt,method,methodPar,doPlot)
+            
+            if ~exist('doPlot','var')
+                doPlot=false;
+            end
             expt.Xnorm=normalizeTraces(expt.t,expt.X,method,methodPar,doPlot);
             expt.normMethod=method;
             expt.normParam=methodPar;
@@ -238,20 +242,37 @@ classdef Experiment < handle
         
         %detrend supports per-interval: for piecewise linear detrend.
         function detrend(expt,method,methodPar,perSegment,doPlot)
+            if ~exist('doPlot','var')
+                doPlot=false;
+            end
             if isempty(expt.Xnorm)
                 expt.Xnorm=expt.X;
                 expt.normMethod='none';
                 expt.normParam=[];
             end
             if perSegment
+%                 doCtsTrace=true;
                 for i=1:expt.nS
                     thisIx=expt.segment(i).ix;
-                    %TODO: this plots a figure for each segment. could suppress & make combined plot?
                     [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),method,methodPar,doPlot);
-                    %TODO: make segments join
+                  
+                    %make segments join
+%                     if doCtsTrace && i>1
+%                         ix1=find(thisIx,1,'first')-1;
+%                         Xdt=Xdt+last;
+%                     end
+                    meanTrend=mean(Xt,1);
+                    Xdt=Xdt+meanTrend;
+                    
                     expt.Xtrend(thisIx,:)=Xt;
                     expt.Xdetrend(thisIx,:)=Xdt;
+%                     last=Xdt(end,:);
                 end
+                
+                %TODO: this plots a figure for each segment. could suppress & make combined plot? Really need a full
+                %preprocessing helper function/plot...?
+%                 expt.plotTrace('detrend');
+                
             else
                 [expt.Xdetrend,expt.Xtrend]=detrendTraces(expt.t,expt.Xnorm,method,methodPar,doPlot);
             end
@@ -269,6 +290,9 @@ classdef Experiment < handle
         
         
         function filter(expt,method,methodPar,doPlot)
+            if ~exist('doPlot','var')
+                doPlot=false;
+            end
             if isempty(expt.Xnorm)
                 expt.Xnorm=expt.X;
                 expt.normMethod='none';
@@ -315,7 +339,7 @@ classdef Experiment < handle
             if ~exist('tix','var')||isempty(tix)
                 tix=1;
                 figID=gcf; %newfig?
-                figID.KeyPressFcn={@expt.traceKeypress,whichPlot};
+                figID.KeyPressFcn={@expt.traceKeypress,whichPlot,showPts};
                 figID.UserData=tix; %store the current trace ID with figure
             end
             

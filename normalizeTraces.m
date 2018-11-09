@@ -1,17 +1,26 @@
 function XNorm=normalizeTraces(t,X,method,methodparam,doPlot)
-%columns are timeseries
-
+% NORMALIZETRACES centers and or scales X values by a variety of methods, columnwise
 %
+% some method options:
 %     'zscore' - (default) normalizes by centering the data to have mean 0
 %                and scaling it to have standard deviation 1.
+%  
+%     'unit'  - normalizes by rescaling the range of the data to the
+%                interval [0,1]. Optional param: [a,b] to set range other than [0,1].
 %
-%     'center' - normalizes by centering the data to have mean 0.
+%     'devmean' - (X-mean(X))/mean(X) 
 %
-%     'range'  - normalizes by rescaling the range of the data to the
-%                interval [0,1].
+
+% TODO: finish error checking, documentation
 
 % TODO: no inputs - return cell array of possible methods with their possible params
 %  {{method},{methodpar}}
+
+% TODO: update plotting method to not rely on nested functions and be more efficient
+
+% if nargin==0
+%     displayHelp()
+% end
 
 if ~exist('method','var')
     method='zscore';
@@ -36,7 +45,7 @@ switch method
             XNorm=intrvl(1)+diff(intrvl)*XNorm;
         end
         
-    case {'ptile'} %methodpar=lo/hi ptile
+    case {'ptile'} %methodparam=[lo,hi] ptile
         p=prctile(X,methodparam,1);
         XNorm=(X-p(1,:))./abs(p(2,:)-p(1,:));
         XNorm(XNorm<0)=0;
@@ -93,7 +102,7 @@ switch method
                 if isnumeric(methodparam) &&isscalar(methodparam)
                     k=methodparam;
                 else
-                    k=0;
+                    k=mean(X,1); %empty param defaults to mean
                 end
                 XNorm=X-k;
         end
@@ -227,3 +236,4 @@ end
     end
 
 end
+

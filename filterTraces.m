@@ -1,5 +1,7 @@
 function [XFilt,tfilt]=filterTraces(t,X,method,methodparam,doPlot)
 
+% TODO: finish error checking, documentation
+
 % TODO: no inputs - return cell array of possible methods with their possible params
 %  {{method},{methodpar}}
 
