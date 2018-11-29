@@ -76,6 +76,12 @@ switch lower(threshMethod)
         thrUp=fracUp;
         thrDown=fracDown;
         
+    case 'meanfrac'
+        %median +/- fraction of amp
+        meanX=mean(X,1);
+        thrUp=meanX + fracUp*globalXamp;
+        thrDown=meanX - fracDown*globalXamp;
+        
     case 'medfrac'
         %median +/- fraction of amp
         medX=median(X,1);
@@ -367,7 +373,7 @@ function [thrPtiles,fracUp,fracDown,minAmp,threshMethod,doInterp,doPlot,figID,do
 defaultF=[0.5,0.4]; %near halfmax
 defaultthrPtiles=[0,100];
 defaultminAmp=0;
-defaultThresholdMethod='medfrac';
+defaultThresholdMethod='meanfrac';
 doInterp=true;
 doPlot=false;
 doKeypress=true;

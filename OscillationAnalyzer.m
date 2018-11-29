@@ -14,6 +14,7 @@ classdef OscillationAnalyzer<handle
         trendMethod='none'
         trendParam=[]
         trendPerSeg=false
+        flattenMethod='none'
         filterMethod='none'
         filterParam=[]
         
@@ -105,7 +106,7 @@ classdef OscillationAnalyzer<handle
             
             app.expt.normalize(app.normMethod,app.normParam,0)
 
-            app.expt.detrend(app.trendMethod,app.trendParam,app.trendPerSeg,0)
+            app.expt.detrend(app.trendMethod,app.trendParam,app.trendPerSeg,app.flattenMethod,0)
 
             app.expt.filter(app.filterMethod,app.filterParam,0)
             

@@ -241,7 +241,10 @@ classdef Experiment < handle
         end
         
         %detrend supports per-interval: for piecewise linear detrend.
-        function detrend(expt,method,methodPar,perSegment,doPlot)
+        function detrend(expt,method,methodPar,perSegment,flattenMethod,doPlot)
+            if ~exist('flattenMethod','var')
+                flattenMethod='none';
+            end
             if ~exist('doPlot','var')
                 doPlot=false;
             end
@@ -251,22 +254,39 @@ classdef Experiment < handle
                 expt.normParam=[];
             end
             if perSegment
-%                 doCtsTrace=true;
                 for i=1:expt.nS
                     thisIx=expt.segment(i).ix;
                     [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),method,methodPar,doPlot);
-                  
-                    %make segments join
-%                     if doCtsTrace && i>1
-%                         ix1=find(thisIx,1,'first')-1;
-%                         Xdt=Xdt+last;
-%                     end
-                    meanTrend=mean(Xt,1);
-                    Xdt=Xdt+meanTrend;
+                    
+                    if ~(flattenMethod=="none")
+                        %apply flattening. TODO: same for all segments? stitch
+                        %last values??
+                        if i==1 
+                            switch flattenMethod
+                                case 'mean'
+                                    addVal=mean(expt.Xnorm(thisIx,:),1);
+                                case 'median'
+                                    addVal=median(expt.Xnorm(thisIx,:),1);
+                                case 'first'
+                                    addVal=expt.Xnorm(find(thisIx,1,'first'),:);
+                                case 'meanTrend'
+                                    addVal=mean(Xt,1);
+                                case 'medianTrend'
+                                    addVal=median(Xt,1);
+                                case 'firstTrend'
+                                    addVal=Xt(1,:);
+                                otherwise
+                                    error(['Unknown flatten method: ', flattenMethod])
+                            end
+                        else
+                            addVal=last-Xdt(1,:); %makes the trace continuous
+                        end
+                        Xdt=Xdt+addVal;
+                        last=Xdt(end,:);
+                    end
                     
                     expt.Xtrend(thisIx,:)=Xt;
                     expt.Xdetrend(thisIx,:)=Xdt;
-%                     last=Xdt(end,:);
                 end
                 
                 %TODO: this plots a figure for each segment. could suppress & make combined plot? Really need a full
@@ -330,6 +350,8 @@ classdef Experiment < handle
         
         function plotTrace(expt,whichPlot,tix,showPts)
             %dispatch function for plotting expt data
+            
+            %TODO: support cell array for whichplot
                         
             if ~exist('showPts','var')||isempty(showPts)
                 showPts=true;
@@ -424,8 +446,48 @@ classdef Experiment < handle
 %             end
         end
         
-        %save results. If required metadata is not set, force user to enter it now
-        function save_results(expt)
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % saving/displaying results
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        
+        function displayResults(expt)
+            %simple table view of results to cross reference with traces
+            %examined by keypress
+            %
+            % keypress here to switch segment?
+            [~,thisFile]=fileparts(expt.filename);
+            resfig=uifigure('Name',['Results: ',thisFile]);
+            
+            ID=repmat((1:expt.nX)',expt.nS,1);
+            SEG=[];TAB=table;
+            for i=1:expt.nS
+                SEG=[SEG;i*ones(expt.nX,1)];
+                TAB=[TAB;struct2table(expt.segment(i).features_trace)];
+            end
+                
+            Results=table();
+            Results.ID=ID;
+            Results.Segment=SEG;
+            Results=[Results,TAB];
+            
+            uit=uitable(resfig,'Data',Results);
+            uit.Position(3:4)=resfig.Position(3:4)-40;
+            
+        end
+        
+%         function displayResultsKeypress
+%         end
+        
+        
+        function writeToExcel(expt,filename,doDistributions)
+            %write a header region with file/experiment info
+            %default: trace level (means/stdevs) features
+            
+            %trace features: column 1=traceID, col2=segment, then features
+            
+            %option to instead do period-wise distributions - how to handle
+            %jagged arrays? one segment per sheet?
+            
         end
         
     end
@@ -490,12 +552,7 @@ classdef Experiment < handle
             %BUG: matlab errors when mousing over data. datatips?? super
             %annoying
             
-            %TODO: support a line handle passed in instead of ax? i.e. just
-            %change x/y data of the line. still need to remove old pts and
-            %plot new ones if desired.
-            
-%             axes(ax)
-            cla
+            cla %do we want to clear current axis?
             hold on
             
             points_option='period';
