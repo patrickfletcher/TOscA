@@ -1,1 +1,0 @@
-function pts=detect_periods(t,X,method,varargin)
