@@ -565,8 +565,8 @@ classdef Experiment < handle
             
             %auto-filename...?
             if ~exist('outfilename','var')||isempty(outfilename)
-                [path,fname,fext]=fileparts(expt.fullfile);
-                outfilename=[path,filesep,fname,'_results',fext];
+                [~,fname,fext]=fileparts(expt.fullfile);
+                outfilename=[fname,'_results',fext];
                 
                 %add numbers??
 %                 it=1;
@@ -1060,6 +1060,10 @@ classdef Experiment < handle
             uit.ColumnFormat={[{'t'},{'segment'},expt.fnames_periods],expt.fnames_periods};
             uit.Data={expt.xfeature,expt.yfeature};
             uit.CellEditCallback=@cellEdit;
+            
+            if expt.featurePlotType=="per-trace"
+                uibg.SelectedObject=uirb2;
+            end
             
             type='feature';
             h = uicontrol('Units','Normalized','Position',[0.2,0.05,0.6,0.2],'String','Done',...
