@@ -56,6 +56,9 @@ classdef Experiment < handle
         nG
         Xg %average traces with same group (always use Xdetrend? probably)
         Xgfilt %filter using filterMethod, filterParam
+        
+        resultsTrace=table
+        resultsPeriod=table
     end
     
     %store parameters used
@@ -87,6 +90,8 @@ classdef Experiment < handle
         
         %keep track of which trace is in focus for plotting - no, this should be a property of the figure
 %         tix=1;
+
+%         resfig
     end
     
     methods
@@ -341,6 +346,8 @@ classdef Experiment < handle
             expt.fnames_trace=fieldnames(expt.segment(1).features_trace)';
             expt.featureMethod=method;
             expt.featureParam=varargin; %methodpar should be varargin?
+            
+            expt.buildResultsTable();
         end
         
         
@@ -455,23 +462,27 @@ classdef Experiment < handle
             %examined by keypress
             %
             % keypress here to switch segment?
-            [~,thisFile]=fileparts(expt.filename);
-            resfig=uifigure('Name',['Results: ',thisFile]);
             
-            ID=repmat((1:expt.nX)',expt.nS,1);
-            SEG=[];TAB=table;
-            for i=1:expt.nS
-                SEG=[SEG;i*ones(expt.nX,1)];
-                TAB=[TAB;struct2table(expt.segment(i).features_trace)];
+            if isempty(expt.resultsTrace)
+                warning('results table is empty, nothing to do')
+                return
             end
-                
-            Results=table();
-            Results.ID=ID;
-            Results.Segment=SEG;
-            Results=[Results,TAB];
             
-            uit=uitable(resfig,'Data',Results);
-            uit.Position(3:4)=resfig.Position(3:4)-40;
+            [~,thisFile]=fileparts(expt.filename);
+%             if isempty(expt.resfig)
+%                 expt.resfig=figure('Name',['Results: ',thisFile]);
+%             else
+%                 figure(expt.resfig);
+%             end
+
+            resfig=figure('Name',['Results: ',thisFile],'NumberTitle','off');
+            
+
+            colnames=[{'Trace'};{'Segment'};fieldnames(expt.segment(1).features_trace)];
+            
+            uit=uitable(resfig,'ColumnName',colnames,'Data',expt.resultsTrace{:,:},'RowName',[]);
+            uit.Units='normalized';
+            uit.Position=[0.025,0.025,0.95,0.95];
             
         end
         
@@ -479,7 +490,7 @@ classdef Experiment < handle
 %         end
         
         
-        function writeToExcel(expt,filename,doDistributions)
+        function writeToExcel(expt,outfilename,doDistributions)
             %write a header region with file/experiment info
             %default: trace level (means/stdevs) features
             
@@ -488,6 +499,41 @@ classdef Experiment < handle
             %option to instead do period-wise distributions - how to handle
             %jagged arrays? one segment per sheet?
             
+            if isempty(expt.resultsTrace)
+                warning('results table is empty, nothing to do')
+                return
+            end
+            
+            
+            %header?
+            
+            %auto-filename...?
+            if ~exist('outfilename','var')||isempty(outfilename)
+                [path,fname,fext]=fileparts(expt.filename);
+                outfilename=[path,filesep,fname,'_results',fext];
+                
+                %add numbers??
+%                 it=1;
+%                 while exist(outfilename,'file')
+%                     outfilename=[path,fname,'_results',it,fext];
+%                     it=it+1;
+%                 end
+            end
+            
+            writetable(expt.resultsTrace,outfilename);
+        end
+        
+        function buildResultsTable(expt)
+            ID=repmat((1:expt.nX)',expt.nS,1);
+            SEG=[];TAB=table;
+            for i=1:expt.nS
+                SEG=[SEG;i*ones(expt.nX,1)];
+                TAB=[TAB;struct2table(expt.segment(i).features_trace)];
+            end
+            expt.resultsTrace=table();
+            expt.resultsTrace.ID=ID;
+            expt.resultsTrace.Segment=SEG;
+            expt.resultsTrace=[expt.resultsTrace,TAB];
         end
         
     end
