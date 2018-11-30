@@ -12,6 +12,7 @@ classdef Experiment < handle
         sex=''
         condition='' %eg. WT vs KO
         filename=''
+        fullfile=''
         notes={}
         
         t
@@ -59,6 +60,7 @@ classdef Experiment < handle
         
         resultsTrace=table
         resultsPeriod=table
+        
     end
     
     %store parameters used
@@ -91,7 +93,9 @@ classdef Experiment < handle
         %keep track of which trace is in focus for plotting - no, this should be a property of the figure
 %         tix=1;
 
-%         resfig
+        fig_handles=matlab.ui.Figure.empty %array of figure handles spawned by this object - use to synchronize trace in focus?
+        tix %in focus trace
+        active_fig %index into fig_handles to maintain its focus upon updates
     end
     
     methods
@@ -105,6 +109,7 @@ classdef Experiment < handle
             %parse inputs
             loadFile=true;
             fullfile=[];
+            filename=[];
             if ~isempty(varargin) && ( ischar(varargin{1}) || isstring(varargin{1}) )
                 [path,filename,ext]=fileparts(varargin{1});
                 fullfile=[path,filesep,filename,ext];
@@ -140,9 +145,11 @@ classdef Experiment < handle
                     expt.setGroup(cell2mat(raw(r,2:size(num,2))))
                 end
                 
-                expt.filename=fullfile;
             end
             
+            expt.filename=filename;
+            expt.fullfile=fullfile;
+                
             time=data(:,1);
             time=time-time(1); %shift time to start at zero
             Xraw=data(:,2:end);
@@ -205,6 +212,8 @@ classdef Experiment < handle
             expt.defineSegments({'1'},[ti(1),ti(end)]);
 %             expt.setGroup(ones(1,expt.nX));
             expt.include=true(1,expt.nX);
+            
+            expt.tix=1;
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -355,68 +364,128 @@ classdef Experiment < handle
         % Plotting functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        function plotTrace(expt,whichPlot,tix,showPts)
+        function plotTrace(expt,whichPlot,tix,showPts,doInteractive)
             %dispatch function for plotting expt data
             
             %TODO: support cell array for whichplot
-                        
+                   
+            if exist('tix','var')&&~isempty(tix)
+                expt.tix=tix;
+            end
+            
             if ~exist('showPts','var')||isempty(showPts)
                 showPts=true;
             end
             
-            %no tix => interactive figure
-            if ~exist('tix','var')||isempty(tix)
-                tix=1;
-                figID=gcf; %newfig?
-                figID.KeyPressFcn={@expt.traceKeypress,whichPlot,showPts};
-                figID.UserData=tix; %store the current trace ID with figure
+            if ~exist('doInteractive','var')||isempty(doInteractive)
+                doInteractive=true;
             end
             
-            expt.plot_t(whichPlot,tix,showPts)
+            if ~iscell(whichPlot)
+                whichPlot={whichPlot};
+            end
             
+            %interactive figure: set up callbacks
+            if doInteractive
+                figID=gcf;
+                figID.Name=['Traces: ',expt.filename];
+                figID.NumberTitle='off';
+                if ~ismember(figID,expt.fig_handles)
+                    expt.fig_handles(end+1)=figID; %register the new fig with expt
+                end
+                figID.KeyPressFcn=@expt.commonKeypress;
+                figID.UserData={'trace',whichPlot,showPts};
+                figID.CloseRequestFcn=@expt.figureCloseFcn;
+            end
+            
+            nPlots=length(whichPlot);
+            for i=1:nPlots
+                subplot(nPlots,1,i)
+                expt.plot_t(whichPlot{i},showPts)
+            end
         end
         
-        function plotPeriodogram(expt,tix)
+        function plotPeriodogram(expt,tix,doInteractive)
             %overlay psd for each segment
             if ~isempty(expt.psd)
-                       
-            if ~exist('tix','var')||isempty(tix)
-                tix=1;
-                figID=gcf; %newfig?
-                figID.KeyPressFcn=@expt.psdKeypress;
-                figID.UserData=tix; %store the current trace ID with figure
+            
+            if exist('tix','var')&&~isempty(tix)
+                expt.tix=tix;
             end
             
-            expt.plot_psd(tix);
+            if ~exist('doInteractive','var')||isempty(doInteractive)
+                doInteractive=true;
+            end
+                      
+            if doInteractive
+                figID=gcf;
+                figID.Name=['Periodogram: ',expt.filename];
+                figID.NumberTitle='off';
+                if ~ismember(figID,expt.fig_handles)
+                    expt.fig_handles(end+1)=figID; %register the new fig with expt
+                end
+                figID.KeyPressFcn=@expt.commonKeypress;
+                figID.UserData={'psd'};
+                figID.CloseRequestFcn=@expt.figureCloseFcn;
+            end
+            
+            expt.plot_psd();
             
             end
         end
         
-        function hl=plotFeatures(expt,featureType,xname,yname,tix)
+        function plotFeatures(expt,xname,yname,tix,doInteractive)
             %TODO: how to manage plotting options?
                 
 %             if ~isempty(expt.segment(1).features)
-                            
-            if isempty(xname)
-                xname='segment';
+            
+            if exist('tix','var')&&~isempty(tix)
+                expt.tix=tix;
             end
             
-            if ~exist('tix','var')||isempty(tix)
-                tix=1;
-                figID=gcf; %newfig?
-                figID.KeyPressFcn={@expt.featureKeypress,xname,yname};
-                figID.UserData=tix; %store the current trace ID with figure
+            if ~exist('doInteractive','var')||isempty(doInteractive)
+                doInteractive=true;
             end
             
-            switch featureType
+            xname=validatestring(xname,['t','segment',expt.fnames_periods,expt.fnames_trace]);
+            yname=validatestring(yname,[expt.fnames_periods,expt.fnames_trace]);
+            
+            if xname=="segment"
+                if ismember(yname,expt.fnames_periods)
+                    featurePlotType='periods';
+                else
+                    featurePlotType='trace';
+                end
+            else
+                xp=ismember(xname,['t',expt.fnames_periods]); %valid for period, otherwise trace
+                yp=ismember(yname,expt.fnames_periods);
+                if xp&&yp
+                    featurePlotType='periods';
+                elseif ~xp&&~yp
+                    featurePlotType='trace';
+                else
+                    error('Incompatible feature types: mixed trace/period')
+                end
+            end
+            
+            %interactive figure: set up callbacks
+            if doInteractive
+                figID=gcf;
+                figID.Name=['Features: ',expt.filename];
+                figID.NumberTitle='off';
+                if ~ismember(figID,expt.fig_handles)
+                    expt.fig_handles(end+1)=figID; %register the new fig with expt
+                end
+                figID.KeyPressFcn=@expt.commonKeypress;
+                figID.UserData={'feature',featurePlotType,xname,yname};
+                figID.CloseRequestFcn=@expt.figureCloseFcn;
+            end
+            
+            switch featurePlotType
                 case 'periods'
-                    xname=validatestring(xname,['t','segment',expt.fnames_periods]);
-                    yname=validatestring(yname,expt.fnames_periods);
-                    hl=expt.plot_features_periods(xname,yname,tix);
+                    expt.plot_features_periods(xname,yname);
                 case 'trace'
-                    xname=validatestring(xname,['t','segment',expt.fnames_trace]);
-                    yname=validatestring(yname,expt.fnames_trace);
-                    hl=expt.plot_features_trace(xname,yname,tix);
+                    expt.plot_features_trace(xname,yname);
             end
             
             axis tight
@@ -462,25 +531,30 @@ classdef Experiment < handle
             %examined by keypress
             %
             % keypress here to switch segment?
+            %  TODO: include=true/false column, select traces for result
+            %  export?
             
             if isempty(expt.resultsTrace)
                 warning('results table is empty, nothing to do')
                 return
             end
             
-            [~,thisFile]=fileparts(expt.filename);
 %             if isempty(expt.resfig)
-%                 expt.resfig=figure('Name',['Results: ',thisFile]);
+%                 expt.resfig=figure('Name',['Results: ',expt.filename]);
 %             else
 %                 figure(expt.resfig);
 %             end
-
-            resfig=figure('Name',['Results: ',thisFile],'NumberTitle','off');
+            
+            resfig=gcf; %uses current figure, or creates one if no figs
+            resfig.Name=['Result Table: ',expt.filename];
+            resfig.NumberTitle='off';
             
 
             colnames=[{'Trace'};{'Segment'};fieldnames(expt.segment(1).features_trace)];
             
-            uit=uitable(resfig,'ColumnName',colnames,'Data',expt.resultsTrace{:,:},'RowName',[]);
+            uit=uitable(resfig,'Data',expt.resultsTrace{:,:});
+            uit.ColumnName=colnames;
+            uit.RowName=[];
             uit.Units='normalized';
             uit.Position=[0.025,0.025,0.95,0.95];
             
@@ -509,7 +583,7 @@ classdef Experiment < handle
             
             %auto-filename...?
             if ~exist('outfilename','var')||isempty(outfilename)
-                [path,fname,fext]=fileparts(expt.filename);
+                [path,fname,fext]=fileparts(expt.fullfile);
                 outfilename=[path,filesep,fname,'_results',fext];
                 
                 %add numbers??
@@ -534,6 +608,12 @@ classdef Experiment < handle
             expt.resultsTrace.ID=ID;
             expt.resultsTrace.Segment=SEG;
             expt.resultsTrace=[expt.resultsTrace,TAB];
+        end
+        
+        
+        function set.tix(expt,newval)
+            expt.tix=newval;
+            expt.updatePlots();
         end
         
     end
@@ -593,30 +673,33 @@ classdef Experiment < handle
         % Plotting functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        function plot_t(expt,whichPlot,tix,showPts)
+        function plot_t(expt,whichPlot,showPts)
             
             %BUG: matlab errors when mousing over data. datatips?? super
             %annoying
             
-            cla %do we want to clear current axis?
+            cla %do we want to clear current axis?  should actually behave like normal plot - add to a fig, unless undesired.
             hold on
             
             points_option='period';
             x2=[];
             switch whichPlot
-                case {'raw'}
-                    x=expt.X(:,tix);
+                case {'r','raw'}
+                    x=expt.X(:,expt.tix);
                     
-                case {'norm'}
-                    x=expt.Xnorm(:,tix);
-                    x2=expt.Xtrend(:,tix);
+                case {'n','norm','normalize','normalized'}
+                    x=expt.Xnorm(:,expt.tix);
+%                     x2=expt.Xtrend(:,expt.tix);
+
+                case {'t','trend','trendline'}
+                    x=expt.Xtrend(:,expt.tix);
                     
-                case {'detrend'}
-                    x=expt.Xdetrend(:,tix);
-                    x2=expt.Xfilt(:,tix);
+                case {'d','detrend','detrended'}
+                    x=expt.Xdetrend(:,expt.tix);
+%                     x2=expt.Xfilt(:,expt.tix);
                     
-                case {'filt'}
-                    x=expt.Xfilt(:,tix);
+                case {'f','filt','filter','filtered'}
+                    x=expt.Xfilt(:,expt.tix);
                     points_option='all';
                     
                 otherwise
@@ -629,15 +712,13 @@ classdef Experiment < handle
             end
             
             
-            %slower:
-%             if ~showPts
-%                 points_option='none';
-%             end
+            %slower, but benefit of encapsulating special point plots in
+            %detector code
 %             plotTrace=false;
 %             for i=1:expt.nS
 %                 tt=expt.t(expt.segment(i).ix);
 %                 xx=x(expt.segment(i).ix);
-%                 pts=expt.segment(i).points(tix);
+%                 pts=expt.segment(i).points(expt.tix);
 %                 pts.period.x=interp1(tt,xx,pts.period.t); %interp x value of period markers
 %                 
 %                 expt.segment(i).plot(tt,xx,pts,1,plotTrace,points_option);
@@ -647,7 +728,7 @@ classdef Experiment < handle
                 for i=1:expt.nS
                     tt=expt.t(expt.segment(i).ix);
                     xx=x(expt.segment(i).ix);
-                    pts=expt.segment(i).points(tix);
+                    pts=expt.segment(i).points(expt.tix);
                     
                     if length(pts.period.t)>1
                         
@@ -666,7 +747,7 @@ classdef Experiment < handle
 %                         line(pts.down.t,pts.down.x,'color','b','marker','o','linestyle','none')
                         
 %                         tupdwn=[pts.up.t(1:length(pts.down.t)); pts.down.t];
-%                         ythresh=[1;1]*expt.segment(i).features(tix).pthresh;
+%                         ythresh=[1;1]*expt.segment(i).features(expt.tix).pthresh;
 %                         plot(ax,tupdwn,ythresh,'b-')
                     else
                     
@@ -680,11 +761,11 @@ classdef Experiment < handle
                 end
             end
             
-            axis tight
-%             xlabel('t')
-%             ylabel(['X',whichPlot])
-            YLIM=ylim();
-            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+%             axis tight
+            xlabel('t')
+            ylabel(['X_{',whichPlot,'}',num2str(expt.tix)])
+%             YLIM=ylim();
+%             ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             for i=2:expt.nS
                 plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
@@ -693,15 +774,15 @@ classdef Experiment < handle
             hold off
         end
         
-        function plot_psd(expt,tix)
+        function plot_psd(expt)
             
 %             axes(ax)
             cla
             hold on;
             
             for i=1:expt.nS
-                plot(expt.f,expt.psd(:,tix,i)); 
-%                 plot(expt.f,pow2db(expt.psd(:,tix,i)));
+                plot(expt.f,expt.psd(:,expt.tix,i)); 
+%                 plot(expt.f,pow2db(expt.psd(:,expt.tix,i)));
             end
             % set(gca,'yscale','log')
 %             fhi=find(
@@ -716,7 +797,7 @@ classdef Experiment < handle
             hold off
         end
         
-        function hl=plot_features_periods(expt,xname,yname,tix)
+        function hl=plot_features_periods(expt,xname,yname)
             
             cla
             hold on;
@@ -728,7 +809,7 @@ classdef Experiment < handle
             colorBySegment=false;  %TODO: always color by segment?
             for i=1:expt.nS
                         
-                y=expt.segment(i).features_periods(tix).(yname);
+                y=expt.segment(i).features_periods(expt.tix).(yname);
                 if isempty(y)
                     return
                 end
@@ -736,21 +817,21 @@ classdef Experiment < handle
                 switch xname
                     case {'t'}
                         %TODO: option for marker location?
-                         x=(expt.segment(i).points(tix).period.t(1:end-1)+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of period
-%                         x=expt.segment(i).points(tix).max.t;
-%                         x=expt.segment(i).points(tix).min.t(1:end-1); %first min
-%                         x=expt.segment(i).points(tix).min.t(2:end); %second min
-%                         x=expt.segment(i).points(tix).down.t;
-%                         x=expt.segment(i).points(tix).up.t;
-%                         x=(expt.segment(i).points(tix).down.t+expt.segment(i).points(tix).period.t(2:end))/2; %midpoint of silent post active
-%                         x=(expt.segment(i).points(tix).up.t+expt.segment(i).points(tix).period.t(1:end-1))/2; %midpoint of silent pre active   
+                         x=(expt.segment(i).points(expt.tix).period.t(1:end-1)+expt.segment(i).points(expt.tix).period.t(2:end))/2; %midpoint of period
+%                         x=expt.segment(i).points(expt.tix).max.t;
+%                         x=expt.segment(i).points(expt.tix).min.t(1:end-1); %first min
+%                         x=expt.segment(i).points(expt.tix).min.t(2:end); %second min
+%                         x=expt.segment(i).points(expt.tix).down.t;
+%                         x=expt.segment(i).points(expt.tix).up.t;
+%                         x=(expt.segment(i).points(expt.tix).down.t+expt.segment(i).points(expt.tix).period.t(2:end))/2; %midpoint of silent post active
+%                         x=(expt.segment(i).points(expt.tix).up.t+expt.segment(i).points(expt.tix).period.t(1:end-1))/2; %midpoint of silent pre active   
                         
                     case {'segment'}
                         %TODO: option for violin plot, boxplot?
                         x=i+xJitter*randn(1,length(y));
 
                     case expt.fnames
-                        x=expt.segment(i).features(tix).(xname);
+                        x=expt.segment(i).features(expt.tix).(xname);
                         colorBySegment=true;
 
                     otherwise
@@ -789,7 +870,7 @@ classdef Experiment < handle
             
         end
         
-        function hl=plot_features_trace(expt,xname,yname,tix)
+        function hl=plot_features_trace(expt,xname,yname)
             
 %             axes(ax)
             cla
@@ -808,20 +889,20 @@ classdef Experiment < handle
                 switch xname
                         
                     case {'segment'}
-                        %plot all trace data as line seg, highlight point tix
+                        %plot all trace data as line seg, highlight point expt.tix
 %                         xx=i+xJitter*randn(1,expt.nX);
                         xx=i*ones(1,expt.nX);
                         yy=[expt.segment(i).features_trace.(yname)];
                         HX(end+1,1)=i;
-                        HY(end+1,1)=yy(tix);
+                        HY(end+1,1)=yy(expt.tix);
                         
 
                     case expt.fnames_trace
                         xx=[expt.segment(i).features_trace.(xname)];
                         yy=[expt.segment(i).features_trace.(yname)];
                         colorBySegment=true;
-                        HX(end+1,1)=xx(tix);
-                        HY(end+1,1)=yy(tix);
+                        HX(end+1,1)=xx(expt.tix);
+                        HY(end+1,1)=yy(expt.tix);
 
                     otherwise
                         error(['Invalid name for x-axis: ' xname])
@@ -862,53 +943,61 @@ classdef Experiment < handle
             hl.hmTix=hmTix;
         end
         
-        function traceKeypress(expt,src,event,whichPlot,showPts)
-            tix=src.UserData;
-            switch(event.Key)
-                case {'leftarrow'}
-                    if tix>1
-                        tix=tix-1;
-                    end
-                case {'rightarrow'}
-                    if tix<expt.nX
-                        tix=tix+1;
-                    end
-            end
-            expt.plot_t(whichPlot,tix,showPts)
-            src.UserData=tix;
-        end
-        
-        function psdKeypress(expt,src,event)
-            tix=src.UserData;
-            switch(event.Key)
-                case {'leftarrow'}
-                    if tix>1
-                        tix=tix-1;
-                    end
-                case {'rightarrow'}
-                    if tix<expt.nX
-                        tix=tix+1;
-                    end
-            end
-            expt.plot_psd(tix)
-            src.UserData=tix;
-        end
-        
-        function featureKeypress(expt,src,event,xname,yname)
-            tix=src.UserData;
-            switch(event.Key)
-                case {'leftarrow'}
-                    if tix>1
-                        tix=tix-1;
-                    end
-                case {'rightarrow'}
-                    if tix<expt.nX
-                        tix=tix+1;
-                    end
-            end
-            expt.plot_features(xname,yname,tix);
-            src.UserData=tix;
-        end
-    end
+        function updatePlots(expt)
+            
+            for i=1:length(expt.fig_handles)
+                figure(expt.fig_handles(i));
+                figData=expt.fig_handles(i).UserData;
+                plotType=figData{1};
+                switch plotType
+                    case 'trace'
+                        whichPlot=figData{2};
+                        showPts=figData{3};
+                        
+                        nPlots=length(whichPlot);
+                        for i=1:nPlots
+                            subplot(nPlots,1,i)
+                            expt.plot_t(whichPlot{i},showPts)
+                        end
+%                         expt.plot_t(whichPlot,showPts)
 
+                    case 'psd'
+                        expt.plot_psd()
+
+                    case 'feature'
+                        featurePlotType=figData{2};
+                        xname=figData{3};
+                        yname=figData{4};
+                        switch featurePlotType
+                            case 'periods'
+                                expt.plot_features_periods(xname,yname);
+                            case 'trace'
+                                expt.plot_features_trace(xname,yname);
+                        end
+                end
+            end
+            figure(expt.active_fig);
+        end
+        
+        function commonKeypress(expt,src,event)
+            expt.active_fig=src;
+            switch(event.Key)
+                case {'leftarrow'}
+                    if expt.tix>1
+                        expt.tix=expt.tix-1;
+                    end
+                case {'rightarrow'}
+                    if expt.tix<expt.nX
+                        expt.tix=expt.tix+1;
+                    end
+            end
+        end
+        
+        function figureCloseFcn(expt,src,event)
+            me=gcf;
+            expt.fig_handles(ismember(expt.fig_handles,me))=[];
+            delete(me)
+        end
+    
+    end
 end
