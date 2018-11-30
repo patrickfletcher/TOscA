@@ -1066,7 +1066,7 @@ classdef Experiment < handle
             end
             
             type='feature';
-            h = uicontrol('Units','Normalized','Position',[0.2,0.05,0.6,0.2],'String','Done',...
+            h = uicontrol('Units','Normalized','Position',[0.2,0.05,0.6,0.2],'String','Plot',...
               'Callback',@launchFeatureUpdate);
           
             function launchFeatureUpdate(src,cbdata)
