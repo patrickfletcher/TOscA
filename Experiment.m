@@ -93,9 +93,13 @@ classdef Experiment < handle
         %keep track of which trace is in focus for plotting - no, this should be a property of the figure
 %         tix=1;
 
+        %interactive plots:
         fig_handles=matlab.ui.Figure.empty %array of figure handles spawned by this object - use to synchronize trace in focus?
         tix %in focus trace
         active_fig %index into fig_handles to maintain its focus upon updates
+        featurePlotType='per-period'
+        xfeature='segment'
+        yfeature='period'
     end
     
     methods
@@ -447,26 +451,37 @@ classdef Experiment < handle
                 doInteractive=true;
             end
             
-            xname=validatestring(xname,['t','segment',expt.fnames_periods,expt.fnames_trace]);
-            yname=validatestring(yname,[expt.fnames_periods,expt.fnames_trace]);
-            
+            %this part is a kludge
+            if exist('xname','var')&&~isempty(xname)
+                xname=validatestring(xname,['t','segment',expt.fnames_periods,expt.fnames_trace]);
+            else
+                xname=expt.xfeature;
+            end
+            if exist('yname','var')&&~isempty(yname)
+                yname=validatestring(yname,[expt.fnames_periods,expt.fnames_trace]);
+            else
+                yname=expt.yfeature;
+            end
             if xname=="segment"
                 if ismember(yname,expt.fnames_periods)
-                    featurePlotType='periods';
+                    expt.featurePlotType='per-period';
                 else
-                    featurePlotType='trace';
+                    expt.featurePlotType='per-trace';
                 end
             else
                 xp=ismember(xname,['t',expt.fnames_periods]); %valid for period, otherwise trace
                 yp=ismember(yname,expt.fnames_periods);
                 if xp&&yp
-                    featurePlotType='periods';
+                    expt.featurePlotType='per-period';
                 elseif ~xp&&~yp
-                    featurePlotType='trace';
+                    expt.featurePlotType='per-trace';
                 else
                     error('Incompatible feature types: mixed trace/period')
                 end
             end
+            
+            expt.xfeature=xname;
+            expt.yfeature=yname;
             
             %interactive figure: set up callbacks
             if doInteractive
@@ -477,49 +492,16 @@ classdef Experiment < handle
                     expt.fig_handles(end+1)=figID; %register the new fig with expt
                 end
                 figID.KeyPressFcn=@expt.commonKeypress;
-                figID.UserData={'feature',featurePlotType,xname,yname};
+                figID.UserData={'feature'};
                 figID.CloseRequestFcn=@expt.figureCloseFcn;
             end
             
-            switch featurePlotType
-                case 'periods'
-                    expt.plot_features_periods(xname,yname);
-                case 'trace'
-                    expt.plot_features_trace(xname,yname);
+            switch expt.featurePlotType
+                case 'per-period'
+                    expt.plot_features_periods();
+                case 'per-trace'
+                    expt.plot_features_trace();
             end
-            
-            axis tight
-            YLIM=ylim();
-            ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
-            
-            switch xname
-                    case {'t'}
-                        xlabel('t')
-                        for i=1:expt.nS
-                            if strcmpi(class(hl(i)),'matlab.graphics.chart.primitive.Line')
-                            hl(i).LineStyle='-';
-                            end
-                        end
-                        hold on
-                        for i=2:expt.nS
-                            plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
-                        end
-                        hold off
-                        xlim([expt.t(1),expt.t(end)])
-                        
-                    case {'segment'} %TODO: do jitter here?
-                        xticks(1:expt.nS)
-                        xticklabels({expt.segment.name})
-                        xlim([0.5,expt.nS+0.5])
-                        xlabel('segment')
-                        
-                otherwise
-                        xlabel(xname)
-            end
-            
-            ylabel(yname)
-            
-%             end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -792,14 +774,19 @@ classdef Experiment < handle
             axis tight
 %             xlim(ax,[0,0.5])
             if expt.nS>1
-                legend({expt.segment.name})
+                legend({expt.segment.name},'AutoUpdate','off')
             end
             hold off
         end
         
-        function hl=plot_features_periods(expt,xname,yname)
+        function hl=plot_features_periods(expt)
             
             cla
+            ax=gca;
+            ax.XTickMode='auto';
+            ax.XTickLabelMode='auto';
+            ax.YTickMode='auto';
+            ax.YTickLabelMode='auto';
             hold on;
             
             xJitter=0.05; %make this a property of the class?
@@ -809,12 +796,12 @@ classdef Experiment < handle
             colorBySegment=false;  %TODO: always color by segment?
             for i=1:expt.nS
                         
-                y=expt.segment(i).features_periods(expt.tix).(yname);
+                y=expt.segment(i).features_periods(expt.tix).(expt.yfeature);
                 if isempty(y)
                     return
                 end
                 
-                switch xname
+                switch expt.xfeature
                     case {'t'}
                         %TODO: option for marker location?
                          x=(expt.segment(i).points(expt.tix).period.t(1:end-1)+expt.segment(i).points(expt.tix).period.t(2:end))/2; %midpoint of period
@@ -830,12 +817,12 @@ classdef Experiment < handle
                         %TODO: option for violin plot, boxplot?
                         x=i+xJitter*randn(1,length(y));
 
-                    case expt.fnames
-                        x=expt.segment(i).features(expt.tix).(xname);
+                    case expt.fnames_periods
+                        x=expt.segment(i).features_periods(expt.tix).(expt.xfeature);
                         colorBySegment=true;
 
                     otherwise
-                        error(['Invalid name for x-axis: ' xname])
+                        error(['Invalid name for x-axis: ' expt.xfeature])
                 end
                 
                 if isempty(x)
@@ -848,7 +835,6 @@ classdef Experiment < handle
             end
                           
             
-            ax=gca;
             ax.ColorOrderIndex=1;  
             hl=matlab.graphics.chart.primitive.Line.empty(expt.nS,0);
             for i=1:expt.nS
@@ -857,8 +843,9 @@ classdef Experiment < handle
                 end
             end
             if colorBySegment
-                legend(hl,{expt.segment.name}) %TODO: option to suppress legend?
+                legend(hl,{expt.segment.name},'AutoUpdate','off') %TODO: option to suppress legend?
             else
+                legend('off')
                 for i=1:expt.nS
                     if ~isempty(XX{i})
                         hl(i).Color='k';
@@ -866,14 +853,46 @@ classdef Experiment < handle
                 end
             end
             
+            axis tight
+%             YLIM=ylim();
+%             ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+            
+            switch expt.xfeature
+                    case {'t'}
+                        for i=1:expt.nS
+                            if strcmpi(class(hl(i)),'matlab.graphics.chart.primitive.Line')
+                            hl(i).LineStyle='-';
+                            end
+                        end
+                        hold on
+                        for i=2:expt.nS
+                            plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                        end
+                        hold off
+                        xlim([expt.t(1),expt.t(end)])
+                        
+                    case {'segment'} %TODO: do jitter here?
+                        xticks(1:expt.nS)
+                        xticklabels({expt.segment.name})
+                        xlim([0.5,expt.nS+0.5])
+            end
+            
+            xlabel(expt.xfeature)
+            ylabel(expt.yfeature)
+            
             hold off
             
         end
         
-        function hl=plot_features_trace(expt,xname,yname)
+        function hl=plot_features_trace(expt)
             
 %             axes(ax)
             cla
+            ax=gca;
+            ax.XTickMode='auto';
+            ax.XTickLabelMode='auto';
+            ax.YTickMode='auto';
+            ax.YTickLabelMode='auto';
             hold on;
             
             xJitter=0.05;
@@ -886,26 +905,26 @@ classdef Experiment < handle
             colorBySegment=false;
             for i=1:expt.nS
                 
-                switch xname
+                switch expt.xfeature
                         
                     case {'segment'}
                         %plot all trace data as line seg, highlight point expt.tix
 %                         xx=i+xJitter*randn(1,expt.nX);
                         xx=i*ones(1,expt.nX);
-                        yy=[expt.segment(i).features_trace.(yname)];
+                        yy=[expt.segment(i).features_trace.(expt.yfeature)];
                         HX(end+1,1)=i;
                         HY(end+1,1)=yy(expt.tix);
                         
 
                     case expt.fnames_trace
-                        xx=[expt.segment(i).features_trace.(xname)];
-                        yy=[expt.segment(i).features_trace.(yname)];
+                        xx=[expt.segment(i).features_trace.(expt.xfeature)];
+                        yy=[expt.segment(i).features_trace.(expt.yfeature)];
                         colorBySegment=true;
                         HX(end+1,1)=xx(expt.tix);
                         HY(end+1,1)=yy(expt.tix);
 
                     otherwise
-                        error(['Invalid name for x-axis: ' xname])
+                        error(['Invalid name for x-axis: ' expt.xfeature])
                 end
                 
                 XX(end+1,:)=xx;
@@ -923,60 +942,78 @@ classdef Experiment < handle
             
             %markers
             
-            ax=gca;
             ax.ColorOrderIndex=1;
             hmAll=plot(XX',YY','o');
+            axis tight
             for i=1:expt.nS
                 hmTix(i)=plot(HX(i),HY(i),'o');
                 hmTix(i).Color=hmAll(i).Color;
                 hmTix(i).MarkerFaceColor=hmAll(i).Color;
             end
             if expt.nS>1
-                legend(hmAll,{expt.segment.name})
+                legend(hmAll,{expt.segment.name},'AutoUpdate','off')
             end
+            
+            if expt.xfeature=="segment"
+                xticks(1:expt.nS)
+                xticklabels({expt.segment.name})
+                xlim([0.5,expt.nS+0.5])
+            end
+            
+            xlabel(expt.xfeature)
+            ylabel(expt.yfeature)
             
             hold off
             
-            hl.hlAll=hlAll;
-            hl.hlTix=hlTix;
-            hl.hmAll=hmAll;
-            hl.hmTix=hmTix;
+%             hl.hlAll=hlAll;
+%             hl.hlTix=hlTix;
+%             hl.hmAll=hmAll;
+%             hl.hmTix=hmTix;
         end
         
-        function updatePlots(expt)
+        function updatePlots(expt,type)
             
+            if ~exist('type','var')
+                type='all';
+            end
+            
+            if ~isempty(expt.fig_handles)
+                
             for i=1:length(expt.fig_handles)
-                figure(expt.fig_handles(i));
                 figData=expt.fig_handles(i).UserData;
                 plotType=figData{1};
-                switch plotType
-                    case 'trace'
-                        whichPlot=figData{2};
-                        showPts=figData{3};
-                        
-                        nPlots=length(whichPlot);
-                        for i=1:nPlots
-                            subplot(nPlots,1,i)
-                            expt.plot_t(whichPlot{i},showPts)
-                        end
-%                         expt.plot_t(whichPlot,showPts)
+                
+                if isequal(plotType,type)||type=="all"
+                    figure(expt.fig_handles(i));
+                    switch plotType
+                        case 'trace'
+                            whichPlot=figData{2};
+                            showPts=figData{3};
 
-                    case 'psd'
-                        expt.plot_psd()
+                            nPlots=length(whichPlot);
+                            for i=1:nPlots
+                                subplot(nPlots,1,i)
+                                expt.plot_t(whichPlot{i},showPts)
+                            end
+    %                         expt.plot_t(whichPlot,showPts)
 
-                    case 'feature'
-                        featurePlotType=figData{2};
-                        xname=figData{3};
-                        yname=figData{4};
-                        switch featurePlotType
-                            case 'periods'
-                                expt.plot_features_periods(xname,yname);
-                            case 'trace'
-                                expt.plot_features_trace(xname,yname);
-                        end
+                        case 'psd'
+                            expt.plot_psd()
+
+                        case 'feature'
+                            
+                            switch expt.featurePlotType
+                                case 'per-period'
+                                    expt.plot_features_periods();
+                                case 'per-trace'
+                                    expt.plot_features_trace();
+                            end
+                    end
                 end
             end
+            
             figure(expt.active_fig);
+            end
         end
         
         function commonKeypress(expt,src,event)
@@ -990,14 +1027,87 @@ classdef Experiment < handle
                     if expt.tix<expt.nX
                         expt.tix=expt.tix+1;
                     end
+                case 'f'
+                    expt.selectFeaturesPopup();
             end
         end
         
-        function figureCloseFcn(expt,src,event)
+        function figureCloseFcn(expt,~,~)
             me=gcf;
             expt.fig_handles(ismember(expt.fig_handles,me))=[];
             delete(me)
         end
-    
+        
+        function selectFeaturesPopup(expt)
+            
+            figh=figure('Name','Select features to plot','NumberTitle','off','MenuBar','none');
+            figh.Position(3:4)=[300,150];
+            uibg=uibuttongroup(figh,'Position',[0.1,0.75,0.8,0.2],'SelectionChangedFcn',@changeRadio);
+%             uibg=uibuttongroup(figh,'Position',[0,80,300,40],'SelectionChangedFcn',@changeRadio);
+            uirb1=uicontrol(uibg,'Style','radiobutton','String','per-period');
+            uirb1.Units='normalized'; uirb1.Position=[0,0,0.5,1];
+            uirb2=uicontrol(uibg,'Style','radiobutton','String','per-trace');
+            uirb2.Units='normalized'; uirb2.Position=[0.5,0,0.5,1];
+            if ~strcmp(expt.featurePlotType,uirb1.String)
+                uirb2.Value=true;
+            end
+            
+            uit=uitable(figh,'Units','Normalized','Position',[0.1,0.3,0.8,0.4]);
+            uit.RowName=[];
+            uit.ColumnWidth={118,118};
+            uit.ColumnEditable=true;
+            uit.ColumnName={'x feature','y feature'};
+            uit.ColumnFormat={[{'t'},{'segment'},expt.fnames_periods],expt.fnames_periods};
+            uit.Data={expt.xfeature,expt.yfeature};
+            uit.CellEditCallback=@cellEdit;
+            
+            type='feature';
+            h = uicontrol('Units','Normalized','Position',[0.2,0.05,0.6,0.2],'String','Done',...
+              'Callback',@launchFeatureUpdate);
+          
+            function launchFeatureUpdate(src,cbdata)
+                expt.updatePlots('feature')
+            end
+            
+            function changeRadio(src,cbdata)
+                switch cbdata.NewValue.String
+                    case 'per-period'
+                        valid_features={[{'t'},{'segment'},expt.fnames_periods],expt.fnames_periods};
+                        uit.ColumnFormat=valid_features;
+                        if ~ismember(uit.Data(1),valid_features{1})
+                            expt.xfeature=valid_features{1}{1};
+                            uit.Data(1)=valid_features{1}(1);
+                        end
+                        if ~ismember(uit.Data(2),valid_features{2})
+                            expt.yfeature=valid_features{2}{1};
+                            uit.Data(2)=valid_features{2}(1);
+                        end
+                            
+                    case 'per-trace'
+                        valid_features={[{'segment'},expt.fnames_trace],expt.fnames_trace};
+                        uit.ColumnFormat=valid_features;
+                        if ~ismember(uit.Data(1),valid_features{1})
+                            expt.xfeature=valid_features{1}{1};
+                            uit.Data(1)=valid_features{1}(1);
+                        end
+                        if ~ismember(uit.Data(2),valid_features{2})
+                            expt.yfeature=valid_features{2}{1};
+                            uit.Data(2)=valid_features{2}(1);
+                        end
+                end
+                expt.featurePlotType=cbdata.NewValue.String;
+            end
+            
+            function cellEdit(src,cbdata)
+                if cbdata.Indices(2)==1
+                    expt.xfeature=cbdata.EditData;
+                elseif cbdata.Indices(2)==2
+                    expt.yfeature=cbdata.EditData;
+                end
+%                 expt.updatePlots('feature')
+            end
+
+        end
+        
     end
 end
