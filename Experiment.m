@@ -6,13 +6,16 @@ classdef Experiment < handle
     %update function to set the visibility on/off (also would support
     %option to plot out-of-focus traces as light gray)
     
+    %TODO: plot mean+/- stdev for per-trace features, when these are distrubtions for the trace. or boxplot. or violin.
+    %if so, remove the stdev from features to plot list.
+    
     properties
         name=''
         date=''
         sex=''
         condition='' %eg. WT vs KO
         filename=''
-        fullfile=''
+        fullfilename=''
         notes={}
         
         t
@@ -54,6 +57,7 @@ classdef Experiment < handle
         psd
         
         group
+        groupID
         nG
         Xg %average traces with same group (always use Xdetrend? probably)
         Xgfilt %filter using filterMethod, filterParam
@@ -72,8 +76,12 @@ classdef Experiment < handle
 %support variable length parameter lists, eg. for name-value pairs
         normMethod='none'
         normParam=[]
+        
         trendMethod='none'
         trendParam=[]
+        perSegment=true
+        flattenMethod='none'
+        
         filterMethod='none'
         filterParam=[]
         
@@ -100,6 +108,10 @@ classdef Experiment < handle
         featurePlotType='per-period'
         xfeature='segment'
         yfeature='period'
+        
+        resfig %figure to show the results table
+        featureSelectDlg
+        paramDlg 
     end
     
     methods
@@ -112,27 +124,29 @@ classdef Experiment < handle
             
             %parse inputs
             loadFile=true;
-            fullfile=[];
+            fullfilename=[];
             filename=[];
             if ~isempty(varargin) && ( ischar(varargin{1}) || isstring(varargin{1}) )
                 [path,filename,ext]=fileparts(varargin{1});
-                fullfile=[path,filesep,filename,ext];
-            elseif ~isempty(varargin) && isnumeric(varargin{1})
+                fullfilename=[path,filesep,filename,ext];
+            elseif ~isempty(varargin) && isnumeric(varargin{1}) && ~isempty(varargin{1})
                 data=varargin{1};
                 loadFile=false;
             end
             
             %load a new file
             if loadFile
-                if isempty(fullfile) || ~exist(fullfile,'file')
+                if isempty(fullfilename) || ~exist(fullfilename,'file')
                     [filename,path]=uigetfile({'*.xls*'});
-                    fullfile=[path,filename];
+                    fullfilename=[path,filename];
                 end
                 
-                [num,txt,raw]=xlsread(fullfile);
+                [num,txt,raw]=xlsread(fullfilename);
                 %extract data
-                ixs=find(cellfun(@(x)(isnumeric(x)&&~isnan(x)),raw(:,1)),1,'first');
-                data=cell2mat(raw(ixs:end,1:size(num,2)));
+%                 ixs=find(cellfun(@(x)(isnumeric(x)&&~isnan(x)),raw(:,1)),1,'first');
+%                 data=cell2mat(raw(ixs:end,1:size(num,2)));
+%                 ixs=find(cellfun(@(x)(isnumeric(x)&&~isnan(x)),raw(:,1)),1,'first');
+                data=num;
                 
                 %look for special metadata entries
                 headerNames=txt(:,1);
@@ -152,7 +166,7 @@ classdef Experiment < handle
             end
             
             expt.filename=filename;
-            expt.fullfile=fullfile;
+            expt.fullfilename=fullfilename;
                 
             time=data(:,1);
             time=time-time(1); %shift time to start at zero
@@ -214,7 +228,7 @@ classdef Experiment < handle
             
             %default segment = whole trace
             expt.defineSegments({'1'},[ti(1),ti(end)]);
-%             expt.setGroup(ones(1,expt.nX));
+            expt.setGroup(ones(1,expt.nX));
             expt.include=true(1,expt.nX);
             
             expt.tix=1;
@@ -237,7 +251,8 @@ classdef Experiment < handle
         
         function setGroup(expt,groupvar)
             expt.group=groupvar;
-            expt.nG=unique(groupvar);
+            expt.groupID=unique(groupvar);
+            expt.nG=length(expt.groupID);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -245,36 +260,53 @@ classdef Experiment < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %TODO: forced order, but flags to choose which steps (if any) to apply?
         %     - alt: arbitrary list of operations, with fully qualified options.
-        %TODO: per-interval, or whole trace options (eg. linear detrend per interval)
-        %TODO: single preprocessing convenience function. how to handle all the options+params? 
+        
+        %TODO: single preprocessing convenience function. how to handle all the options+params?
+%         function preprocess(expt)
+%         end
+        
+        %TODO: Separate param setters/getters from the methods that actually run the preprocessing
+%         function setNormalization(expt,method,methodPar)
+%             expt.normMethod=method;
+%             expt.normParam=methodPar;
+%         end
         
         function normalize(expt,method,methodPar,doPlot)
-            
+            expt.normMethod=method;
+            expt.normParam=methodPar;
             if ~exist('doPlot','var')
                 doPlot=false;
             end
-            expt.Xnorm=normalizeTraces(expt.t,expt.X,method,methodPar,doPlot);
-            expt.normMethod=method;
-            expt.normParam=methodPar;
+            expt.Xnorm=normalizeTraces(expt.t,expt.X,expt.normMethod,expt.normParam,doPlot);
         end
         
         %detrend supports per-interval: for piecewise linear detrend.
         function detrend(expt,method,methodPar,perSegment,flattenMethod,doPlot)
+            if ~exist('perSegment','var')
+                perSegment=true;
+            end
             if ~exist('flattenMethod','var')
                 flattenMethod='none';
             end
             if ~exist('doPlot','var')
                 doPlot=false;
             end
+            
             if isempty(expt.Xnorm)
                 expt.Xnorm=expt.X;
                 expt.normMethod='none';
                 expt.normParam=[];
             end
-            if perSegment
+            
+            expt.trendMethod=method;
+            expt.trendParam=methodPar;
+            expt.perSegment=perSegment;
+            expt.flattenMethod=flattenMethod;
+            
+            if expt.perSegment
                 for i=1:expt.nS
                     thisIx=expt.segment(i).ix;
-                    [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),method,methodPar,doPlot);
+                    [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),expt.trendMethod,expt.trendParam,doPlot);
                     
                     if ~(flattenMethod=="none")
                         %apply flattening. TODO: same for all segments? stitch
@@ -312,22 +344,22 @@ classdef Experiment < handle
 %                 expt.plotTrace('detrend');
                 
             else
-                [expt.Xdetrend,expt.Xtrend]=detrendTraces(expt.t,expt.Xnorm,method,methodPar,doPlot);
+                [expt.Xdetrend,expt.Xtrend]=detrendTraces(expt.t,expt.Xnorm,expt.trendMethod,expt.trendParam,doPlot);
             end
-            expt.trendMethod=method;
-            expt.trendParam=methodPar;
+            expt.averageTraces();
         end
         
         function averageTraces(expt)
             XDTg=zeros(length(expt.t),expt.nG);
-            for j=1:nI  
-                XDTg(:,j)=mean(XDTg(:,I==uI(j)),2);  
+            for j=1:expt.nG  
+                XDTg(:,j)=mean(expt.Xdetrend(:,expt.group==expt.groupID(j)),2);  
             end
             expt.Xg=XDTg;
         end
         
-        
         function filter(expt,method,methodPar,doPlot)
+            expt.filterMethod=method;
+            expt.filterParam=methodPar;
             if ~exist('doPlot','var')
                 doPlot=false;
             end
@@ -341,9 +373,7 @@ classdef Experiment < handle
                 expt.trendMethod='none';
                 expt.trendParam=[];
             end
-            expt.Xfilt=filterTraces(expt.t,expt.Xdetrend,method,methodPar,doPlot);
-            expt.filterMethod=method;
-            expt.filterParam=methodPar;
+            expt.Xfilt=filterTraces(expt.t,expt.Xdetrend,expt.filterMethod,expt.filterParam,doPlot);
         end
         
         
@@ -527,14 +557,16 @@ classdef Experiment < handle
 %                 figure(expt.resfig);
 %             end
             
-            resfig=gcf; %uses current figure, or creates one if no figs
-            resfig.Name=['Result Table: ',expt.filename];
-            resfig.NumberTitle='off';
+            expt.resfig=gcf; %uses current figure, or creates one if no figs
+            expt.resfig.Name=['Result Table: ',expt.filename];
+            expt.resfig.NumberTitle='off';
             
-
+            expt.resfig.KeyPressFcn=@expt.commonKeypress;
+%             expt.resfig.CloseRequestFcn=@expt.figureCloseFcn;
+            
             colnames=[{'Trace'};{'Segment'};fieldnames(expt.segment(1).features_trace)];
             
-            uit=uitable(resfig,'Data',expt.resultsTrace{:,:});
+            uit=uitable(expt.resfig,'Data',expt.resultsTrace{:,:});
             uit.ColumnName=colnames;
             uit.RowName=[];
             uit.Units='normalized';
@@ -565,15 +597,18 @@ classdef Experiment < handle
             
             %auto-filename...?
             if ~exist('outfilename','var')||isempty(outfilename)
-                [~,fname,fext]=fileparts(expt.fullfile);
-                outfilename=[fname,'_results',fext];
+                [path,file,fext]=fileparts(expt.fullfilename);
+                outfilename=fullfile(path,[file,'_results',fext]);
                 
-                %add numbers??
-%                 it=1;
-%                 while exist(outfilename,'file')
-%                     outfilename=[path,fname,'_results',it,fext];
-%                     it=it+1;
-%                 end
+                %suggest file name and request confirmation:
+                filter='*.xls*';
+                title='Enter the output file name';
+                [file,path]  = uiputfile(filter,title,outfilename);
+                if isequal(file,0) || isequal(path,0)
+                    return
+                else
+                    outfilename=fullfile(path,file);
+                end
             end
             
             writetable(expt.resultsTrace,outfilename);
@@ -960,6 +995,10 @@ classdef Experiment < handle
                 xlim([0.5,expt.nS+0.5])
             end
             
+            if (expt.xfeature=="periodMean"||expt.xfeature=="Tpsd") && (expt.yfeature=="periodMean"||expt.yfeature=="Tpsd")
+                line(xlim,xlim)
+            end
+            
             xlabel(expt.xfeature)
             ylabel(expt.yfeature)
             
@@ -991,9 +1030,9 @@ classdef Experiment < handle
                             showPts=figData{3};
 
                             nPlots=length(whichPlot);
-                            for i=1:nPlots
-                                subplot(nPlots,1,i)
-                                expt.plot_t(whichPlot{i},showPts)
+                            for j=1:nPlots
+                                subplot(nPlots,1,j)
+                                expt.plot_t(whichPlot{j},showPts)
                             end
     %                         expt.plot_t(whichPlot,showPts)
 
@@ -1012,7 +1051,11 @@ classdef Experiment < handle
                 end
             end
             
-            figure(expt.active_fig);
+%             if expt.active_fig~=expt.resfig
+                figure(expt.active_fig);
+%             else
+%                 figure(expt.fig_handles(1))
+%             end
             end
         end
         
@@ -1020,15 +1063,35 @@ classdef Experiment < handle
             expt.active_fig=src;
             switch(event.Key)
                 case {'leftarrow'}
+                    %previous trace
                     if expt.tix>1
                         expt.tix=expt.tix-1;
                     end
+                    
                 case {'rightarrow'}
+                    %next trace
                     if expt.tix<expt.nX
                         expt.tix=expt.tix+1;
                     end
+                    
                 case 'f'
+                    %select features to plot
                     expt.selectFeaturesPopup();
+                    
+                case 'g'
+                    %toggle grouped mode
+                    
+                case 'p'
+                    %parameter dialog
+                    expt.parameterDialog();
+                    
+                case 's'
+                    %save results
+                    expt.writeToExcel();
+                    
+                case 'q'
+                    %quit - close all windows
+                    expt.quit();
             end
         end
         
@@ -1040,9 +1103,10 @@ classdef Experiment < handle
         
         function selectFeaturesPopup(expt)
             
-            figh=figure('Name','Select features to plot','NumberTitle','off','MenuBar','none');
-            figh.Position(3:4)=[300,150];
-            uibg=uibuttongroup(figh,'Position',[0.1,0.75,0.8,0.2],'SelectionChangedFcn',@changeRadio);
+            expt.featureSelectDlg=figure('Name','Select features to plot','NumberTitle','off','MenuBar','none');
+            expt.featureSelectDlg.KeyPressFcn=@expt.commonKeypress;
+            expt.featureSelectDlg.Position(3:4)=[300,150];
+            uibg=uibuttongroup(expt.featureSelectDlg,'Position',[0.1,0.75,0.8,0.2],'SelectionChangedFcn',@changeRadio);
 %             uibg=uibuttongroup(figh,'Position',[0,80,300,40],'SelectionChangedFcn',@changeRadio);
             uirb1=uicontrol(uibg,'Style','radiobutton','String','per-period');
             uirb1.Units='normalized'; uirb1.Position=[0,0,0.5,1];
@@ -1052,7 +1116,7 @@ classdef Experiment < handle
                 uirb2.Value=true;
             end
             
-            uit=uitable(figh,'Units','Normalized','Position',[0.1,0.3,0.8,0.4]);
+            uit=uitable(expt.featureSelectDlg,'Units','Normalized','Position',[0.1,0.3,0.8,0.4]);
             uit.RowName=[];
             uit.ColumnWidth={118,118};
             uit.ColumnEditable=true;
@@ -1113,5 +1177,58 @@ classdef Experiment < handle
 
         end
         
+       
+        function parameterDialog(expt)
+            prompt = {'Detrend:','Filter:','Threshold:'};
+            title = 'Enter parameter values';
+            dims = [1,50];
+            oldtrend=expt.trendParam;
+            oldfilt=expt.filterParam;
+            oldfeat=expt.featureParam{1};
+            definput = {num2str(oldtrend), num2str(oldfilt), num2str(oldfeat,'%g, %g')};
+            opts.WindowStyle='normal';
+            answer = inputdlg(prompt,title,dims,definput,opts);
+            if isempty(answer)
+                return
+            else
+                doUpdate=false;
+                newtrend = str2double(answer{1});
+                if newtrend~=oldtrend
+                    expt.trendParam=newtrend;
+                    expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
+                    doUpdate=true;
+                end
+                
+                newfilt = str2double(answer{2});
+                if newfilt~=oldfilt
+                    expt.filterParam=newfilt;
+                    expt.filter(expt.filterMethod,expt.filterParam,0);
+                    doUpdate=true;
+                end
+                
+                newfeat = str2num(answer{3});
+                if any(newfeat~=oldfeat)
+                    expt.featureParam={newfeat};
+                    doUpdate=true;
+                end
+                
+                if doUpdate==true
+                    expt.compute_features(expt.featureMethod,expt.featureParam{:});
+                    expt.updatePlots()
+                end
+            end
+        end
+        
+        function quit(expt)
+            if ~isempty(expt.fig_handles)
+                close(expt.fig_handles)
+            end
+            if ~isempty(expt.resfig)
+                close(expt.resfig)
+            end
+            if ~isempty(expt.featureSelectDlg)
+                close(expt.featureSelectDlg)
+            end
+        end
     end
 end
