@@ -1116,12 +1116,19 @@ classdef Experiment < handle
                 uirb2.Value=true;
             end
             
+            switch expt.featurePlotType
+                case 'per-period'
+                    selections={[{'t'},{'segment'},expt.fnames_periods],expt.fnames_periods};
+                case 'per-trace'
+                    selections={[{'t'},{'segment'},expt.fnames_trace],expt.fnames_trace};
+            end
+            
             uit=uitable(expt.featureSelectDlg,'Units','Normalized','Position',[0.1,0.3,0.8,0.4]);
             uit.RowName=[];
             uit.ColumnWidth={118,118};
             uit.ColumnEditable=true;
             uit.ColumnName={'x feature','y feature'};
-            uit.ColumnFormat={[{'t'},{'segment'},expt.fnames_periods],expt.fnames_periods};
+            uit.ColumnFormat=selections;
             uit.Data={expt.xfeature,expt.yfeature};
             uit.CellEditCallback=@cellEdit;
             
@@ -1134,6 +1141,13 @@ classdef Experiment < handle
               'Callback',@launchFeatureUpdate);
           
             function launchFeatureUpdate(src,cbdata)
+                
+                for i=1:length(expt.fig_handles)
+                    if strcmp(expt.fig_handles(i).UserData,'feature')
+                        expt.active_fig=expt.fig_handles(i);
+                    end
+                end
+                
                 expt.updatePlots('feature')
             end
             
