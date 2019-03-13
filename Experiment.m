@@ -61,6 +61,7 @@ classdef Experiment < handle
         nG
         Xg %average traces with same group (always use Xdetrend? probably)
         Xgfilt %filter using filterMethod, filterParam
+        groupMode=false
         
         resultsTrace=table
         resultsPeriod=table
@@ -346,7 +347,10 @@ classdef Experiment < handle
             else
                 [expt.Xdetrend,expt.Xtrend]=detrendTraces(expt.t,expt.Xnorm,expt.trendMethod,expt.trendParam,doPlot);
             end
-            expt.averageTraces();
+            
+            if expt.groupMode
+                expt.averageTraces();
+            end
         end
         
         function averageTraces(expt)
@@ -354,7 +358,11 @@ classdef Experiment < handle
             for j=1:expt.nG  
                 XDTg(:,j)=mean(expt.Xdetrend(:,expt.group==expt.groupID(j)),2);  
             end
-            expt.Xg=XDTg;
+            expt.Xdetrend=XDTg; %groupmode overwrites detrend... TODO: keep both for plotting
+            expt.nX=size(XDTg,2);
+            expt.include=true(1,size(XDTg,2));
+            
+%             expt.Xg=XDTg;
         end
         
         function filter(expt,method,methodPar,doPlot)
@@ -564,7 +572,7 @@ classdef Experiment < handle
             expt.resfig.KeyPressFcn=@expt.commonKeypress;
             expt.resfig.CloseRequestFcn=@expt.resfigCloseFcn;
             
-            colnames=[{'Trace'};{'Segment'};fieldnames(expt.segment(1).features_trace)];
+            colnames=[{'Trace'};{'Group'};{'Segment'};{'Include'};fieldnames(expt.segment(1).features_trace)];
 %             colnames=[{'Trace'};{'Segment'};{'Include'};fieldnames(expt.segment(1).features_trace)];
 %             colformat=repmat({'numeric'},1,length(colnames));
 %             coledit=false(1,length(colnames));
@@ -625,6 +633,11 @@ classdef Experiment < handle
         function buildResultsTable(expt)
             ID=repmat((1:expt.nX)',expt.nS,1);
             INC=repmat(expt.include',expt.nS,1);
+            if expt.groupMode
+                GRP=repmat(expt.groupID',expt.nS,1);
+            else
+                GRP=repmat(expt.group',expt.nS,1);
+            end
             SEG=[];TAB=table;
             for i=1:expt.nS
                 SEG=[SEG;i*ones(expt.nX,1)];
@@ -632,8 +645,9 @@ classdef Experiment < handle
             end
             expt.resultsTrace=table();
             expt.resultsTrace.ID=ID;
+            expt.resultsTrace.Group=GRP;
             expt.resultsTrace.Segment=SEG;
-%             expt.resultsTrace.Include=INC;
+            expt.resultsTrace.Include=INC;
             expt.resultsTrace=[expt.resultsTrace,TAB];
         end
         
@@ -1099,6 +1113,9 @@ classdef Experiment < handle
                     %toggle include
                     expt.include(expt.tix)=~expt.include(expt.tix);
                     expt.updatePlots('feature')
+                    expt.buildResultsTable();
+                    figure(expt.resfig);
+                    expt.displayResults();
                     
                 case 'p'
                     %parameter dialog

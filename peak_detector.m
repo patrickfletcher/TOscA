@@ -269,7 +269,7 @@ fnames=fieldnames(Fdist);
 for i=1:nX
     for j=1:length(fnames)
         F(i).([fnames{j},'Mean'])=mean(Fdist(i).(fnames{j}));
-        F(i).([fnames{j},'Stdev'])=std(Fdist(i).(fnames{j}));
+%         F(i).([fnames{j},'Stdev'])=std(Fdist(i).(fnames{j}));
     end
 end
 
