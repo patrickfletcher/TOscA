@@ -562,12 +562,20 @@ classdef Experiment < handle
             expt.resfig.NumberTitle='off';
             
             expt.resfig.KeyPressFcn=@expt.commonKeypress;
-%             expt.resfig.CloseRequestFcn=@expt.figureCloseFcn;
+            expt.resfig.CloseRequestFcn=@expt.resfigCloseFcn;
             
             colnames=[{'Trace'};{'Segment'};fieldnames(expt.segment(1).features_trace)];
+%             colnames=[{'Trace'};{'Segment'};{'Include'};fieldnames(expt.segment(1).features_trace)];
+%             colformat=repmat({'numeric'},1,length(colnames));
+%             coledit=false(1,length(colnames));
+%             colformat(3)={'logical'}; 
+%             coledit(3)=true; 
+            %needs a callback function to link edited values to expt.include
             
             uit=uitable(expt.resfig,'Data',expt.resultsTrace{:,:});
             uit.ColumnName=colnames;
+%             uit.ColumnFormat=colformat;
+%             uit.ColumnEditable=coledit;
             uit.RowName=[];
             uit.Units='normalized';
             uit.Position=[0.025,0.025,0.95,0.95];
@@ -616,6 +624,7 @@ classdef Experiment < handle
         
         function buildResultsTable(expt)
             ID=repmat((1:expt.nX)',expt.nS,1);
+            INC=repmat(expt.include',expt.nS,1);
             SEG=[];TAB=table;
             for i=1:expt.nS
                 SEG=[SEG;i*ones(expt.nX,1)];
@@ -624,6 +633,7 @@ classdef Experiment < handle
             expt.resultsTrace=table();
             expt.resultsTrace.ID=ID;
             expt.resultsTrace.Segment=SEG;
+%             expt.resultsTrace.Include=INC;
             expt.resultsTrace=[expt.resultsTrace,TAB];
         end
         
@@ -980,11 +990,15 @@ classdef Experiment < handle
             ax.ColorOrderIndex=1;
             hmAll=plot(XX',YY','o');
             axis tight
+            
             for i=1:expt.nS
                 hmTix(i)=plot(HX(i),HY(i),'o');
                 hmTix(i).Color=hmAll(i).Color;
                 hmTix(i).MarkerFaceColor=hmAll(i).Color;
             end
+            
+            hmExcluded=plot(XX(~expt.include)',YY(~expt.include)','kx');
+            
             if expt.nS>1
                 legend(hmAll,{expt.segment.name},'AutoUpdate','off')
             end
@@ -1081,6 +1095,11 @@ classdef Experiment < handle
                 case 'g'
                     %toggle grouped mode
                     
+                case 'i'
+                    %toggle include
+                    expt.include(expt.tix)=~expt.include(expt.tix);
+                    expt.updatePlots('feature')
+                    
                 case 'p'
                     %parameter dialog
                     expt.parameterDialog();
@@ -1099,6 +1118,13 @@ classdef Experiment < handle
             me=gcf;
             expt.fig_handles(ismember(expt.fig_handles,me))=[];
             delete(me)
+        end
+        function resfigCloseFcn(expt,~,~)
+            me=gcf;
+            if isequal(expt.resfig,me) 
+                expt.resfig=[];
+                delete(me)
+            end
         end
         
         function selectFeaturesPopup(expt)
