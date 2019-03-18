@@ -1252,14 +1252,12 @@ classdef Experiment < handle
                 newtrend = str2double(answer{1});
                 if newtrend~=oldtrend
                     expt.trendParam=newtrend;
-                    expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
                     doUpdate=true;
                 end
                 
                 newfilt = str2double(answer{2});
                 if newfilt~=oldfilt
                     expt.filterParam=newfilt;
-                    expt.filter(expt.filterMethod,expt.filterParam,0);
                     doUpdate=true;
                 end
                 
@@ -1270,6 +1268,8 @@ classdef Experiment < handle
                 end
                 
                 if doUpdate==true
+                    expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
+                    expt.filter(expt.filterMethod,expt.filterParam,0);
                     expt.compute_features(expt.featureMethod,expt.featureParam{:});
                     expt.updatePlots()
                 end
