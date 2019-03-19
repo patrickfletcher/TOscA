@@ -1007,15 +1007,6 @@ classdef Experiment < handle
         
         function updatePlots(expt,type)
             
-            %BUG: If mouse focused on active fig and mousing over graphics
-            %objs, keypress+update plots invalidates whatever mouse was
-            %pointing to => errors in console. Moving mouse out of window
-            %and back fixes it.
-            
-%             for i=1:length(expt.fig_handles)
-%                 expt.fig_handles(i).HitTest='off';
-%             end
-            
             if ~exist('type','var')
                 type='all';
             end
@@ -1061,10 +1052,6 @@ classdef Experiment < handle
 %                 figure(expt.fig_handles(1))
 %             end
             end
-            
-%             for i=1:length(expt.fig_handles)
-%                 expt.fig_handles(i).HitTest='on';
-%             end
             
         end
         
