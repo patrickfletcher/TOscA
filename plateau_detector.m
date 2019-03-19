@@ -373,7 +373,7 @@ function [thrPtiles,fracUp,fracDown,minAmp,threshMethod,doInterp,doPlot,figID,do
 defaultF=[0.5,0.4]; %near halfmax
 defaultthrPtiles=[0,100];
 defaultminAmp=0;
-defaultThresholdMethod='meanfrac';
+defaultThresholdMethod='fracamp';
 doInterp=true;
 doPlot=false;
 doKeypress=true;

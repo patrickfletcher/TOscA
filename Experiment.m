@@ -59,8 +59,8 @@ classdef Experiment < handle
         group
         groupID
         nG
-        Xg %average traces with same group (always use Xdetrend? probably)
-        Xgfilt %filter using filterMethod, filterParam
+        XdetrendG %average traces with same group (always use Xdetrend? probably)
+        XfiltG %filter using filterMethod, filterParam
         groupMode=false
         
         resultsTrace=table
@@ -214,8 +214,9 @@ classdef Experiment < handle
             %interpolate on a fixed grid with given DT
             %TODO: DT as parameter (for same DT across expts)
             % - alt, make this a method with DT parameter
-            XI=[];
+            
             ti=0:DT:time(end); ti=ti';
+            XI=zeros(length(ti),size(Xraw,2));
             for j=1:size(Xraw,2)
                 XI(:,j)=interp1(time,Xraw(:,j),ti,'pchip');
             end
@@ -356,8 +357,11 @@ classdef Experiment < handle
         function averageTraces(expt)
             XDTg=zeros(length(expt.t),expt.nG);
             for j=1:expt.nG  
-                XDTg(:,j)=mean(expt.Xdetrend(:,expt.group==expt.groupID(j)),2);  
+                XDTg(:,j)=mean(expt.Xdetrend(:,expt.group==expt.groupID(j) & expt.include),2);  
             end
+            emptygroup=isnan(XDTg(1,:));
+            XDTg(:,emptygroup)=[]; %remove any groups with no members
+            expt.groupID(emptygroup)=[];
             expt.Xdetrend=XDTg; %groupmode overwrites detrend... TODO: keep both for plotting
             expt.nX=size(XDTg,2);
             expt.include=true(1,size(XDTg,2));
@@ -703,12 +707,26 @@ classdef Experiment < handle
                 Tpsd=1./fmax;
                 expt.psd(:,:,i)=PSD;
                 
+                PSD(1,:)=Pmax;
+                [~,~,points]=peak_detector(F,PSD,0.05);
+                m2=zeros(1,length(points));
+                for j=1:length(points)
+                    othermax=points(j).max.x~=Pmax(j);
+                    if any(othermax)
+                        m2(j)=max(points(j).max.x(othermax));
+                    end
+                end
+                Rp21=m2./Pmax;
+                
                 Tpsd=num2cell(Tpsd);
                 fmax=num2cell(fmax);
                 Pmax=num2cell(Pmax);
+                Rp21=num2cell(Rp21);
+                
                 [expt.segment(i).features_trace.Tpsd]=Tpsd{:};
                 [expt.segment(i).features_trace.fmax]=fmax{:};
                 [expt.segment(i).features_trace.Pmax]=Pmax{:};
+                [expt.segment(i).features_trace.Rp21]=Rp21{:};
             end
             expt.f=F; %frquency vector
         end
@@ -923,27 +941,23 @@ classdef Experiment < handle
             
         end
         
-        function hl=plot_features_trace(expt)
+        function plot_features_trace(expt)
             
             ax=gca;
             reset(ax)
             delete(findobj(ax,'tag','oscar_line'));
             
-            xJitter=0.05;
-           
             HX=[];
             HY=[];
             XX=[];
             YY=[];
             
-            colorBySegment=false;
             for i=1:expt.nS
                 
                 switch expt.xfeature
                         
                     case {'segment'}
                         %plot all trace data as line seg, highlight point expt.tix
-%                         xx=i+xJitter*randn(1,expt.nX);
                         xx=i*ones(1,expt.nX);
                         yy=[expt.segment(i).features_trace.(expt.yfeature)];
                         HX(end+1,1)=i;
@@ -953,7 +967,6 @@ classdef Experiment < handle
                     case expt.fnames_trace
                         xx=[expt.segment(i).features_trace.(expt.xfeature)];
                         yy=[expt.segment(i).features_trace.(expt.yfeature)];
-                        colorBySegment=true;
                         HX(end+1,1)=xx(expt.tix);
                         HY(end+1,1)=yy(expt.tix);
 
@@ -1150,11 +1163,10 @@ classdef Experiment < handle
                 uibg.SelectedObject=uirb2;
             end
             
-            type='feature';
-            h = uicontrol('Units','Normalized','Position',[0.2,0.05,0.6,0.2],'String','Plot',...
+            uicontrol('Units','Normalized','Position',[0.2,0.05,0.6,0.2],'String','Plot',...
               'Callback',@launchFeatureUpdate);
           
-            function launchFeatureUpdate(src,cbdata)
+            function launchFeatureUpdate(~,~)
                 
                 for i=1:length(expt.fig_handles)
                     if strcmp(expt.fig_handles(i).UserData,'feature')
@@ -1165,7 +1177,7 @@ classdef Experiment < handle
                 expt.updatePlots('feature')
             end
             
-            function changeRadio(src,cbdata)
+            function changeRadio(~,cbdata)
                 switch cbdata.NewValue.String
                     case 'per-period'
                         valid_features={[{'t'},{'segment'},expt.fnames_periods],expt.fnames_periods};
@@ -1194,7 +1206,7 @@ classdef Experiment < handle
                 expt.featurePlotType=cbdata.NewValue.String;
             end
             
-            function cellEdit(src,cbdata)
+            function cellEdit(~,cbdata)
                 if cbdata.Indices(2)==1
                     expt.xfeature=cbdata.EditData;
                 elseif cbdata.Indices(2)==2
