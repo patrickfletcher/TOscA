@@ -719,8 +719,7 @@ classdef Experiment < handle
             %BUG: matlab errors when mousing over data. datatips?? super
             %annoying
             
-            cla %do we want to clear current axis?  should actually behave like normal plot - add to a fig, unless undesired.
-            hold on
+            delete(findobj(gca,'tag','oscar_line'));
             
             points_option='period';
             x2=[];
@@ -747,9 +746,9 @@ classdef Experiment < handle
                     error([whichPlot, ' is not a supported trace to plot']);
             end
             
-            plot(expt.t,x,'k')
+            line(expt.t,x,'color','k','tag','oscar_line')
             if ~isempty(x2)
-                plot(expt.t,x2)
+                line(expt.t,x2,'tag','oscar_line')
             end
             
             
@@ -774,18 +773,12 @@ classdef Experiment < handle
                     if length(pts.period.t)>1
                         
                     if points_option=="all"
-                        plot(pts.min.t,pts.min.x,'r^')
-                        plot(pts.max.t,pts.max.x,'rv')
-                        plot(pts.dxmin.t,pts.dxmin.x,'g<')
-                        plot(pts.dxmax.t,pts.dxmax.x,'g>')
-                        plot(pts.up.t,pts.up.x,'bd')
-                        plot(pts.down.t,pts.down.x,'bo')
-%                         line(pts.min.t,pts.min.x,'color','r','marker','^','linestyle','none')
-%                         line(pts.max.t,pts.max.x,'color','r','marker','v','linestyle','none')
-%                         line(pts.dxmin.t,pts.dxmin.x,'color','g','marker','<','linestyle','none')
-%                         line(pts.dxmax.t,pts.dxmax.x,'color','g','marker','>','linestyle','none')
-%                         line(pts.up.t,pts.up.x,'color','b','marker','d','linestyle','none')
-%                         line(pts.down.t,pts.down.x,'color','b','marker','o','linestyle','none')
+                        line(pts.min.t,pts.min.x,'color','r','marker','^','linestyle','none','tag','oscar_line')
+                        line(pts.max.t,pts.max.x,'color','r','marker','v','linestyle','none','tag','oscar_line')
+                        line(pts.dxmin.t,pts.dxmin.x,'color','g','marker','<','linestyle','none','tag','oscar_line')
+                        line(pts.dxmax.t,pts.dxmax.x,'color','g','marker','>','linestyle','none','tag','oscar_line')
+                        line(pts.up.t,pts.up.x,'color','b','marker','d','linestyle','none','tag','oscar_line')
+                        line(pts.down.t,pts.down.x,'color','b','marker','o','linestyle','none','tag','oscar_line')
                         
 %                         tupdwn=[pts.up.t(1:length(pts.down.t)); pts.down.t];
 %                         ythresh=[1;1]*expt.segment(i).features(expt.tix).pthresh;
@@ -793,8 +786,7 @@ classdef Experiment < handle
                     else
                     
                         xPer=interp1(tt,xx,pts.period.t); %this is necessary except for filt
-                        plot(pts.period.t,xPer,'bs')
-%                         line(pts.period.t,xPer,'color','b','marker','s','linestyle','none')
+                        line(pts.period.t,xPer,'color','b','marker','s','linestyle','none','tag','oscar_line')
 
                     end
                     
@@ -809,44 +801,35 @@ classdef Experiment < handle
 %             ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             for i=2:expt.nS
-                plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                line(expt.segment(i).endpoints(1)*[1,1],ylim(),'color','g','tag','oscar_line')
             end
             
-            hold off
         end
         
         function plot_psd(expt)
             
-%             axes(ax)
-            cla
-            hold on;
+            delete(findobj(gca,'tag','oscar_line'));
             
             for i=1:expt.nS
-                plot(expt.f,expt.psd(:,expt.tix,i)); 
-%                 plot(expt.f,pow2db(expt.psd(:,expt.tix,i)));
-            end
-            % set(gca,'yscale','log')
-%             fhi=find(
-%             title('One Sided Power Spectral Density');       
+                line(expt.f,expt.psd(:,expt.tix,i),'tag','oscar_line'); 
+            end     
             xlabel('frequency')         
             ylabel('power');
             axis tight
-%             xlim(ax,[0,0.5])
             if expt.nS>1
                 legend({expt.segment.name},'AutoUpdate','off')
             end
-            hold off
         end
         
-        function hl=plot_features_periods(expt)
+        function plot_features_periods(expt)
             
-            cla
+            delete(findobj(gca,'tag','oscar_line'));
+            
             ax=gca;
             ax.XTickMode='auto';
             ax.XTickLabelMode='auto';
             ax.YTickMode='auto';
             ax.YTickLabelMode='auto';
-            hold on;
             
             xJitter=0.05; %make this a property of the class?
            
@@ -898,7 +881,7 @@ classdef Experiment < handle
             hl=matlab.graphics.chart.primitive.Line.empty(expt.nS,0);
             for i=1:expt.nS
                 if ~isempty(XX{i})
-                    hl(i,1)=plot(XX{i},YY{i},'o');
+                    hl(i,1)=line(XX{i},YY{i},'marker','o','linestyle','none','tag','oscar_line');
                 end
             end
             if colorBySegment
@@ -913,8 +896,6 @@ classdef Experiment < handle
             end
             
             axis tight
-%             YLIM=ylim();
-%             ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
             
             switch expt.xfeature
                     case {'t'}
@@ -925,7 +906,7 @@ classdef Experiment < handle
                         end
                         hold on
                         for i=2:expt.nS
-                            plot(expt.segment(i).endpoints(1)*[1,1],ylim(),'g')
+                            line(expt.segment(i).endpoints(1)*[1,1],ylim(),'color','g','tag','oscar_line')
                         end
                         hold off
                         xlim([expt.t(1),expt.t(end)])
@@ -939,20 +920,17 @@ classdef Experiment < handle
             xlabel(expt.xfeature)
             ylabel(expt.yfeature)
             
-            hold off
-            
         end
         
         function hl=plot_features_trace(expt)
             
-%             axes(ax)
-            cla
+            delete(findobj(gca,'tag','oscar_line'));
+            
             ax=gca;
             ax.XTickMode='auto';
             ax.XTickLabelMode='auto';
             ax.YTickMode='auto';
             ax.YTickLabelMode='auto';
-            hold on;
             
             xJitter=0.05;
            
@@ -992,26 +970,24 @@ classdef Experiment < handle
             end
             
             %line segment below markers:
-            hlAll=[];
-            hlTix=[];
             if expt.nS>1
-                hlAll=plot(XX,YY,'-','color',[0.5,0.5,0.5]);
-                hlTix=plot(HX,HY,'k-','linewidth',1.5);
+                line(XX,YY,'color',[0.5,0.5,0.5],'linestyle','-','tag','oscar_line');
+                line(HX,HY,'color','k','linestyle','-','linewidth',1.5,'tag','oscar_line');
             end
             
             %markers
             
             ax.ColorOrderIndex=1;
-            hmAll=plot(XX',YY','o');
+            hmAll=line(XX',YY','marker','o','linestyle','none','tag','oscar_line');
             axis tight
             
             for i=1:expt.nS
-                hmTix(i)=plot(HX(i),HY(i),'o');
-                hmTix(i).Color=hmAll(i).Color;
-                hmTix(i).MarkerFaceColor=hmAll(i).Color;
+                line(HX(i),HY(i),'marker','o','linestyle','none',...
+                    'color',hmAll(i).Color,'markerfacecolor',hmAll(i).Color,'tag','oscar_line');
             end
             
-            hmExcluded=plot(XX(~expt.include)',YY(~expt.include)','kx');
+            line(XX(~expt.include)',YY(~expt.include)','color','k',...
+                'linestyle','none','marker','x','tag','oscar_line');
             
             if expt.nS>1
                 legend(hmAll,{expt.segment.name},'AutoUpdate','off')
@@ -1024,18 +1000,12 @@ classdef Experiment < handle
             end
             
             if (expt.xfeature=="periodMean"||expt.xfeature=="Tpsd") && (expt.yfeature=="periodMean"||expt.yfeature=="Tpsd")
-                line(xlim,xlim)
+                line(xlim,xlim,'tag','oscar_line')
             end
             
             xlabel(expt.xfeature)
             ylabel(expt.yfeature)
             
-            hold off
-            
-%             hl.hlAll=hlAll;
-%             hl.hlTix=hlTix;
-%             hl.hmAll=hmAll;
-%             hl.hmTix=hmTix;
         end
         
         function updatePlots(expt,type)
@@ -1062,7 +1032,6 @@ classdef Experiment < handle
                                 subplot(nPlots,1,j)
                                 expt.plot_t(whichPlot{j},showPts)
                             end
-    %                         expt.plot_t(whichPlot,showPts)
 
                         case 'psd'
                             expt.plot_psd()
@@ -1136,6 +1105,7 @@ classdef Experiment < handle
             expt.fig_handles(ismember(expt.fig_handles,me))=[];
             delete(me)
         end
+        
         function resfigCloseFcn(expt,~,~)
             me=gcf;
             if isequal(expt.resfig,me) 
