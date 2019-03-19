@@ -436,6 +436,7 @@ classdef Experiment < handle
                     expt.fig_handles(end+1)=figID; %register the new fig with expt
                 end
                 figID.KeyPressFcn=@expt.commonKeypress;
+%                 figID.Interruptible='off';
                 figID.UserData={'trace',whichPlot,showPts};
                 figID.CloseRequestFcn=@expt.figureCloseFcn;
             end
@@ -467,6 +468,7 @@ classdef Experiment < handle
                     expt.fig_handles(end+1)=figID; %register the new fig with expt
                 end
                 figID.KeyPressFcn=@expt.commonKeypress;
+%                 figID.Interruptible='off';
                 figID.UserData={'psd'};
                 figID.CloseRequestFcn=@expt.figureCloseFcn;
             end
@@ -526,12 +528,13 @@ classdef Experiment < handle
                 figID=gcf;
                 figID.Name=['Features: ',expt.filename];
                 figID.NumberTitle='off';
+                figID.KeyPressFcn=@expt.commonKeypress;
+%                 figID.Interruptible='off';
+                figID.UserData={'feature'};
+                figID.CloseRequestFcn=@expt.figureCloseFcn;
                 if ~ismember(figID,expt.fig_handles)
                     expt.fig_handles(end+1)=figID; %register the new fig with expt
                 end
-                figID.KeyPressFcn=@expt.commonKeypress;
-                figID.UserData={'feature'};
-                figID.CloseRequestFcn=@expt.figureCloseFcn;
             end
             
             switch expt.featurePlotType
@@ -570,6 +573,7 @@ classdef Experiment < handle
             expt.resfig.NumberTitle='off';
             
             expt.resfig.KeyPressFcn=@expt.commonKeypress;
+%             expt.resfig.Interruptible='off';
             expt.resfig.CloseRequestFcn=@expt.resfigCloseFcn;
             
             colnames=[{'Trace'};{'Group'};{'Segment'};{'Include'};fieldnames(expt.segment(1).features_trace)];
@@ -652,10 +656,10 @@ classdef Experiment < handle
         end
         
         
-        function set.tix(expt,newval)
-            expt.tix=newval;
-            expt.updatePlots();
-        end
+%         function set.tix(expt,newval)
+%             expt.tix=newval;
+%             expt.updatePlots();
+%         end
         
     end
     
@@ -715,9 +719,6 @@ classdef Experiment < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         function plot_t(expt,whichPlot,showPts)
-            
-            %BUG: matlab errors when mousing over data. datatips?? super
-            %annoying
             
             delete(findobj(gca,'tag','oscar_line'));
             
@@ -1010,6 +1011,15 @@ classdef Experiment < handle
         
         function updatePlots(expt,type)
             
+            %BUG: If mouse focused on active fig and mousing over graphics
+            %objs, keypress+update plots invalidates whatever mouse was
+            %pointing to => errors in console. Moving mouse out of window
+            %and back fixes it.
+            
+%             for i=1:length(expt.fig_handles)
+%                 expt.fig_handles(i).HitTest='off';
+%             end
+            
             if ~exist('type','var')
                 type='all';
             end
@@ -1029,7 +1039,8 @@ classdef Experiment < handle
 
                             nPlots=length(whichPlot);
                             for j=1:nPlots
-                                subplot(nPlots,1,j)
+                                %TODO: use tight_subplot?
+                                subplot(nPlots,1,j);
                                 expt.plot_t(whichPlot{j},showPts)
                             end
 
@@ -1054,6 +1065,11 @@ classdef Experiment < handle
 %                 figure(expt.fig_handles(1))
 %             end
             end
+            
+%             for i=1:length(expt.fig_handles)
+%                 expt.fig_handles(i).HitTest='on';
+%             end
+            
         end
         
         function commonKeypress(expt,src,event)
@@ -1063,12 +1079,14 @@ classdef Experiment < handle
                     %previous trace
                     if expt.tix>1
                         expt.tix=expt.tix-1;
+                        expt.updatePlots();
                     end
                     
                 case {'rightarrow'}
                     %next trace
                     if expt.tix<expt.nX
                         expt.tix=expt.tix+1;
+                        expt.updatePlots();
                     end
                     
                 case 'f'
