@@ -720,7 +720,9 @@ classdef Experiment < handle
         
         function plot_t(expt,whichPlot,showPts)
             
-            delete(findobj(gca,'tag','oscar_line'));
+            ax=gca;
+            reset(ax)
+            delete(findobj(ax,'tag','oscar_line'));
             
             points_option='period';
             x2=[];
@@ -809,7 +811,9 @@ classdef Experiment < handle
         
         function plot_psd(expt)
             
-            delete(findobj(gca,'tag','oscar_line'));
+            ax=gca;
+            reset(ax)
+            delete(findobj(ax,'tag','oscar_line'));
             
             for i=1:expt.nS
                 line(expt.f,expt.psd(:,expt.tix,i),'tag','oscar_line'); 
@@ -824,13 +828,9 @@ classdef Experiment < handle
         
         function plot_features_periods(expt)
             
-            delete(findobj(gca,'tag','oscar_line'));
-            
             ax=gca;
-            ax.XTickMode='auto';
-            ax.XTickLabelMode='auto';
-            ax.YTickMode='auto';
-            ax.YTickLabelMode='auto';
+            reset(ax)
+            delete(findobj(ax,'tag','oscar_line'));
             
             xJitter=0.05; %make this a property of the class?
            
@@ -925,13 +925,9 @@ classdef Experiment < handle
         
         function hl=plot_features_trace(expt)
             
-            delete(findobj(gca,'tag','oscar_line'));
-            
             ax=gca;
-            ax.XTickMode='auto';
-            ax.XTickLabelMode='auto';
-            ax.YTickMode='auto';
-            ax.YTickLabelMode='auto';
+            reset(ax)
+            delete(findobj(ax,'tag','oscar_line'));
             
             xJitter=0.05;
            
