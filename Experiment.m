@@ -2,12 +2,52 @@ classdef Experiment < handle
     %class to represent a single experiment containing >=1 timeseries that share the same time sample points. For
     %example, a fluorescence videomicroscopy experiment with multiple ROIs in a field of view. 
 
-    %TODO: plotting efficiently - plot all timeseries onces, and use an
+    
+    %TODO: make parameterDialog a regular figure with "go" button, like
+    %selectFeaturesPopup
+    
+    
+    %TODO: add normalization to parameterDialog
+    
+    %TODO: get valid options for preprocessing functions exported from those
+    %functions to display in dropdown lists
+    
+    %TODO: forced order, but flags to choose which steps (if any) to apply?
+    %     - alt: arbitrary list of operations, with fully qualified options.
+    %TODO: Customizeable pipeline? eg. array processingStep objects to define
+    %steps (name+operation+method+params), and pointer to which one
+    %gets periods measured and which one features get measured. pages
+    %of X correspond to each step: eg. X(:,:,1)=raw, X(:,:,2)=norm, ..., X(:,:,end)=per
+    
+    %TODO: single preprocessing convenience function. how to handle all the options+params?
+%         function preprocess(expt)
+%         end
+
+    %TODO: Separate param setters/getters from the methods that actually run the preprocessing
+%         function setNormalization(expt,method,methodPar)
+%             expt.normMethod=method;
+%             expt.normParam=methodPar;
+%         end
+    
+    
+    %TODO: plotting alternatives - plot all timeseries onces, and use an
     %update function to set the visibility on/off (also would support
     %option to plot out-of-focus traces as light gray)
     
     %TODO: plot mean+/- stdev for per-trace features, when these are distrubtions for the trace. or boxplot. or violin.
     %if so, remove the stdev from features to plot list.
+    
+    
+    %TODO: finalize private/public properties and methods for full OOP
+        
+    
+    %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
+    % this requires supporting different pipeline options for each
+    % observable and allows computation of new higher order features,
+    % such as phase relationship
+    % --> actually, will likely determine period markers using only one
+    % observable, then compute features relative to those markers in
+    % other traces?
     
     properties
         name=''
@@ -18,53 +58,45 @@ classdef Experiment < handle
         fullfilename=''
         notes={}
         
-        t
-        dt
-        
         %segment is a subinterval of the trace, the basic unit within which
         %periodicity will be detected and features will be computed
+        nS
         segment=struct('name','','endpoints',[],'ix',[],...
             'points',struct(),'features_periods',struct(),'features_trace',struct())
-        nS
         
-        %TODO: support 3D array - 3rd dim is observable id (one [nT x nX] page per observable)
-        % this requires supporting different pipeline options for each
-        % observable and allows computation of new higher order features,
-        % such as phase relationship
-        % --> actually, will likely determine period markers using only one
-        % observable, then compute features relative to those markers in
-        % other traces?
-        
-        %TODO: Customizeable pipeline? eg. array processingStep objects to define
-        %steps (name+operation+method+params), and pointer to which one
-        %gets periods measured and which one features get measured. pages
-        %of X correspond to each step: eg. X(:,:,1)=raw, X(:,:,2)=norm, ..., X(:,:,end)=per
-        X
-        Xnorm
-        Xtrend
-        Xdetrend
-        Xfilt
-        
-        include %set element to zero to exclude a trace; X(:,include)
-        nX
-        
-        featureFcn
-        fnames_periods
-        fnames_trace
-        
+        t
+        dt
         fs %1/dt
         f
         psd
         
-        group
+        X
+        nX
+        includeT %place to store trace-wise include vector
+        
+        groupT 
         groupID
         nG
-        XdetrendG %average traces with same group (always use Xdetrend? probably)
-        XfiltG %filter using filterMethod, filterParam
+        includeG %groupwise include vector
+        
         groupMode=false
+        
+        featureFcn %not used?
+        fnames_periods
+        fnames_trace
         
         resultsTrace=table
         resultsPeriod=table
+        
+        
+        %private (?):
+        N
+        group
+        include
+        Xnorm
+        Xtrend
+        Xdetrend
+        Xfilt
         
     end
     
@@ -91,6 +123,7 @@ classdef Experiment < handle
         
         featureMethod='threshold'
         featureParam={}
+        featureExtras={}
         
         interpMethod='linear'
         
@@ -231,7 +264,7 @@ classdef Experiment < handle
             %default segment = whole trace
             expt.defineSegments({'1'},[ti(1),ti(end)]);
             expt.setGroup(ones(1,expt.nX));
-            expt.include=true(1,expt.nX);
+            expt.includeT=true(1,expt.nX);
             
             expt.tix=1;
         end
@@ -252,26 +285,19 @@ classdef Experiment < handle
         end
         
         function setGroup(expt,groupvar)
-            expt.group=groupvar;
+            expt.groupT=groupvar;
             expt.groupID=unique(groupvar);
             expt.nG=length(expt.groupID);
+            expt.includeG=true(1,expt.nG); %could add second input to set this at same time
+        end
+        
+        function excludeTraces(expt,excludeIx)
+            expt.includeT(excludeIx)=false;
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Preprocessing functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %TODO: forced order, but flags to choose which steps (if any) to apply?
-        %     - alt: arbitrary list of operations, with fully qualified options.
-        
-        %TODO: single preprocessing convenience function. how to handle all the options+params?
-%         function preprocess(expt)
-%         end
-        
-        %TODO: Separate param setters/getters from the methods that actually run the preprocessing
-%         function setNormalization(expt,method,methodPar)
-%             expt.normMethod=method;
-%             expt.normParam=methodPar;
-%         end
         
         function normalize(expt,method,methodPar,doPlot)
             expt.normMethod=method;
@@ -351,22 +377,29 @@ classdef Experiment < handle
             
             if expt.groupMode
                 expt.averageTraces();
+                expt.group=expt.groupID;
+                expt.include=expt.includeG;
+                expt.N=expt.nG;
+            else
+                expt.group=expt.groupT;
+                expt.include=expt.includeT;
+                expt.N=expt.nX;
             end
         end
         
-        function averageTraces(expt)
+        function averageTraces(expt) 
+            %TODO: handle edge case - all traces for a group excluded 
+            
             XDTg=zeros(length(expt.t),expt.nG);
             for j=1:expt.nG  
                 XDTg(:,j)=mean(expt.Xdetrend(:,expt.group==expt.groupID(j) & expt.include),2);  
             end
-            emptygroup=isnan(XDTg(1,:));
-            XDTg(:,emptygroup)=[]; %remove any groups with no members
-            expt.groupID(emptygroup)=[];
-            expt.Xdetrend=XDTg; %groupmode overwrites detrend... TODO: keep both for plotting
-            expt.nX=size(XDTg,2);
-            expt.include=true(1,size(XDTg,2));
+%             emptygroup=isnan(XDTg(1,:));
+%             XDTg(:,emptygroup)=[]; %remove any groups with no members
+%             expt.groupID(emptygroup)=[];
             
-%             expt.Xg=XDTg;
+            expt.Xdetrend=XDTg; %groupmode overwrites detrend... TODO: keep both for plotting
+%             expt.nX=size(XDTg,2);
         end
         
         function filter(expt,method,methodPar,doPlot)
@@ -394,13 +427,16 @@ classdef Experiment < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %TODO expand this - detect_periods return only points/fcns, then compute_features should apply fcn to relevant
         %traces.
-        function compute_features(expt,method,varargin)
-            expt.detect_periods(method,varargin{:});
+        function compute_features(expt,method,methodpar,varargin)
+            if nargin>1
+            expt.featureMethod=method;
+            expt.featureParam=methodpar;
+            expt.featureExtras=varargin;
+            end
+            expt.detect_periods();
             expt.periodogram();
             expt.fnames_periods=fieldnames(expt.segment(1).features_periods)';
             expt.fnames_trace=fieldnames(expt.segment(1).features_trace)';
-            expt.featureMethod=method;
-            expt.featureParam=varargin; %methodpar should be varargin?
             
             expt.buildResultsTable();
         end
@@ -639,16 +675,12 @@ classdef Experiment < handle
         end
         
         function buildResultsTable(expt)
-            ID=repmat((1:expt.nX)',expt.nS,1);
+            ID=repmat((1:expt.N)',expt.nS,1);
             INC=repmat(expt.include',expt.nS,1);
-            if expt.groupMode
-                GRP=repmat(expt.groupID',expt.nS,1);
-            else
-                GRP=repmat(expt.group',expt.nS,1);
-            end
+            GRP=repmat(expt.group',expt.nS,1);
             SEG=[];TAB=table;
             for i=1:expt.nS
-                SEG=[SEG;i*ones(expt.nX,1)];
+                SEG=[SEG;i*ones(expt.N,1)];
                 TAB=[TAB;struct2table(expt.segment(i).features_trace)];
             end
             expt.resultsTrace=table();
@@ -673,22 +705,25 @@ classdef Experiment < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Analysis functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function detect_periods(expt,method,varargin)
+        function detect_periods(expt)
+%             expt.featureMethod=method;
+%             expt.featureParam=methodpar;
+%             expt.featureExtras=varargin{:};
             
-            extras={};
+            extras=expt.featureExtras;
             for i=1:expt.nS
                 thisIx=expt.segment(i).ix;
                 tt=expt.t(thisIx);
                 xx=expt.Xfilt(thisIx,:);
-                switch method
+                switch expt.featureMethod
                     case {'peaks'}
-                        delta=varargin{1};
-                        if length(varargin)>1, extras=varargin(2:end); end
+                        delta=expt.featureParam;
+%                         if length(varargin)>1, extras=varargin(2:end); end
                         [F, Fdist, points, fcns]=peak_detector(tt,xx,delta,extras{:});
 
                     case {'threshold'}
-                        frac=varargin{1};
-                        if length(varargin)>1, extras=varargin(2:end); end
+                        frac=expt.featureParam;
+%                         if length(varargin)>1, extras=varargin(2:end); end
                         [F, Fdist, points, fcns]=plateau_detector(tt,xx,frac,extras{:});
                 end
                 
@@ -705,6 +740,8 @@ classdef Experiment < handle
                 [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xdetrend(thisIx,:),expt.fs);
 %                 [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
                 Tpsd=1./fmax;
+                
+                expt.psd=zeros([size(PSD),expt.nS]);
                 expt.psd(:,:,i)=PSD;
                 
                 PSD(1,:)=Pmax;
@@ -764,7 +801,7 @@ classdef Experiment < handle
                     points_option='all';
                     
                 otherwise
-                    error([whichPlot, ' is not a supported trace to plot']);
+                    error([whichPlot, ' is not a supported trace type for plotting']);
             end
             
             line(expt.t,x,'color','k','tag','oscar_line')
@@ -958,7 +995,7 @@ classdef Experiment < handle
                         
                     case {'segment'}
                         %plot all trace data as line seg, highlight point expt.tix
-                        xx=i*ones(1,expt.nX);
+                        xx=i*ones(1,expt.N);
                         yy=[expt.segment(i).features_trace.(expt.yfeature)];
                         HX(end+1,1)=i;
                         HY(end+1,1)=yy(expt.tix);
@@ -1080,7 +1117,7 @@ classdef Experiment < handle
                     
                 case {'rightarrow'}
                     %next trace
-                    if expt.tix<expt.nX
+                    if expt.tix<expt.N
                         expt.tix=expt.tix+1;
                         expt.updatePlots();
                     end
@@ -1091,18 +1128,30 @@ classdef Experiment < handle
                     
                 case 'g'
                     %toggle grouped mode
+                    expt.groupMode=~expt.groupMode;
+                    
+                    %needs full pipeline helper function
+                    expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
+                    expt.filter(expt.filterMethod,expt.filterParam,0);
+                    expt.compute_features();
+                    expt.updatePlots()
+                    figure(expt.resfig);
+                    expt.displayResults();
                     
                 case 'i'
                     %toggle include
                     expt.include(expt.tix)=~expt.include(expt.tix);
+                    
+                    %needs full pipeline helper function
+                    expt.compute_features();
                     expt.updatePlots('feature')
-                    expt.buildResultsTable();
                     figure(expt.resfig);
                     expt.displayResults();
                     
                 case 'p'
                     %parameter dialog
-                    expt.parameterDialog();
+                    doUpdate=expt.parameterDialog();
+                    %needs full pipeline helper function
                     
                 case 's'
                     %save results
@@ -1218,13 +1267,13 @@ classdef Experiment < handle
         end
         
        
-        function parameterDialog(expt)
+        function doUpdate=parameterDialog(expt)
             prompt = {'Detrend:','Filter:','Threshold:'};
             title = 'Enter parameter values';
             dims = [1,50];
             oldtrend=expt.trendParam;
             oldfilt=expt.filterParam;
-            oldfeat=expt.featureParam{1};
+            oldfeat=expt.featureParam;
             definput = {num2str(oldtrend), num2str(oldfilt), num2str(oldfeat,'%g, %g')};
             opts.WindowStyle='normal';
             answer = inputdlg(prompt,title,dims,definput,opts);
@@ -1253,7 +1302,7 @@ classdef Experiment < handle
                 if doUpdate==true
                     expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
                     expt.filter(expt.filterMethod,expt.filterParam,0);
-                    expt.compute_features(expt.featureMethod,expt.featureParam{:});
+                    expt.compute_features();
                     expt.updatePlots()
                 end
             end

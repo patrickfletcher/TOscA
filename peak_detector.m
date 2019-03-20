@@ -339,8 +339,8 @@ end
 function [delta,platThresh,minAmp,doPlot,figID,dokeypress]=parseArgs(t, X, varargin)
 
 %default parameters
-defaultDelta=0.35;
-defaultPlatThresh=0.5;
+defaultDelta=0.35; %fraction of amplitude change required since last min/max before it's considered a min/max
+defaultPlatThresh=0.5; %fraction of amplitude at which to measure active phase
 defaultminAmp=0;
 
 doPlot=false;
