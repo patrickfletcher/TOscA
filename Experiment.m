@@ -34,6 +34,10 @@ classdef Experiment < handle
     %update function to set the visibility on/off (also would support
     %option to plot out-of-focus traces as light gray)
     
+    %TODO: updatePlots needs to be axis-aware? store plottype & extra info
+    %in axis userdata not figure? store axes handles instead of figure
+    %handles? => single figure GUI 
+    
     %TODO: plot mean+/- stdev for per-trace features, when these are distrubtions for the trace. or boxplot. or violin.
     %if so, remove the stdev from features to plot list.
     
@@ -380,10 +384,12 @@ classdef Experiment < handle
                 expt.group=expt.groupID;
                 expt.include=expt.includeG;
                 expt.N=expt.nG;
+                expt.tix=expt.groupT(expt.tix);
             else
                 expt.group=expt.groupT;
                 expt.include=expt.includeT;
                 expt.N=expt.nX;
+                expt.tix=find(expt.groupT==expt.tix,1,'first'); %alt: store trace/group ix separately
             end
         end
         
@@ -399,7 +405,7 @@ classdef Experiment < handle
 %             expt.groupID(emptygroup)=[];
             
             expt.Xdetrend=XDTg; %groupmode overwrites detrend... TODO: keep both for plotting
-%             expt.nX=size(XDTg,2);
+
         end
         
         function filter(expt,method,methodPar,doPlot)
@@ -1141,6 +1147,11 @@ classdef Experiment < handle
                 case 'i'
                     %toggle include
                     expt.include(expt.tix)=~expt.include(expt.tix);
+                    if expt.groupMode
+                        expt.includeG=expt.include;
+                    else
+                        expt.includeT=expt.include;
+                    end
                     
                     %needs full pipeline helper function
                     expt.compute_features();
@@ -1295,15 +1306,18 @@ classdef Experiment < handle
                 
                 newfeat = str2num(answer{3});
                 if any(newfeat~=oldfeat)
-                    expt.featureParam={newfeat};
+                    expt.featureParam=newfeat;
                     doUpdate=true;
                 end
                 
                 if doUpdate==true
+                    %needs full pipeline helper function
                     expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
                     expt.filter(expt.filterMethod,expt.filterParam,0);
                     expt.compute_features();
                     expt.updatePlots()
+                    figure(expt.resfig);
+                    expt.displayResults();
                 end
             end
         end
