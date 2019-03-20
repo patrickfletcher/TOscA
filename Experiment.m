@@ -19,16 +19,6 @@ classdef Experiment < handle
     %gets periods measured and which one features get measured. pages
     %of X correspond to each step: eg. X(:,:,1)=raw, X(:,:,2)=norm, ..., X(:,:,end)=per
     
-    %TODO: single preprocessing convenience function. how to handle all the options+params?
-%         function preprocess(expt)
-%         end
-
-    %TODO: Separate param setters/getters from the methods that actually run the preprocessing
-%         function setNormalization(expt,method,methodPar)
-%             expt.normMethod=method;
-%             expt.normParam=methodPar;
-%         end
-    
     
     %TODO: plotting alternatives - plot all timeseries onces, and use an
     %update function to set the visibility on/off (also would support
@@ -116,7 +106,7 @@ classdef Experiment < handle
         
         trendMethod='none'
         trendParam=[]
-        perSegment=true
+        perSegment=false
         flattenMethod='none'
         
         filterMethod='none'
@@ -131,23 +121,15 @@ classdef Experiment < handle
         
         interpMethod='linear'
         
-%         thrFrac=[0.55,0.45]
-%         delta=0.25
-%         Tbig=15
-%         Tsmall=4
-        
-        %keep track of which trace is in focus for plotting - no, this should be a property of the figure
-%         tix=1;
-
         %interactive plots:
         fig_handles=matlab.ui.Figure.empty %array of figure handles spawned by this object - use to synchronize trace in focus?
-        tix %in focus trace
+        tix %in focus
         active_fig %index into fig_handles to maintain its focus upon updates
         featurePlotType='per-period'
         xfeature='segment'
         yfeature='period'
         
-        resfig %figure to show the results table
+        resfig=matlab.ui.Figure.empty %figure to show the results table
         featureSelectDlg
         paramDlg 
     end
@@ -257,6 +239,7 @@ classdef Experiment < handle
             for j=1:size(Xraw,2)
                 XI(:,j)=interp1(time,Xraw(:,j),ti,'pchip');
             end
+            
             expt.t=ti;
             expt.X=XI;
             
@@ -271,6 +254,11 @@ classdef Experiment < handle
             expt.includeT=true(1,expt.nX);
             
             expt.tix=1;
+            %groupMode default is false
+            expt.group=expt.groupT; 
+            expt.include=expt.includeT;
+            expt.N=expt.nX;
+             
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -293,52 +281,84 @@ classdef Experiment < handle
             expt.groupID=unique(groupvar);
             expt.nG=length(expt.groupID);
             expt.includeG=true(1,expt.nG); %could add second input to set this at same time
+            
+            %update the internal current group/include/N
+            if expt.groupMode
+                expt.group=expt.groupID;
+                expt.include=expt.includeG;
+                expt.N=expt.nG;
+            else
+                expt.group=expt.groupT;
+                expt.include=expt.includeT;
+                expt.N=expt.nX;
+            end
         end
         
         function excludeTraces(expt,excludeIx)
+            %TODO: groupMode sensitive?
             expt.includeT(excludeIx)=false;
         end
+        
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Preprocessing functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
-        function normalize(expt,method,methodPar,doPlot)
+        function setNormalizeParameters(expt,method,methodPar)
             expt.normMethod=method;
             expt.normParam=methodPar;
-            if ~exist('doPlot','var')
-                doPlot=false;
-            end
-            expt.Xnorm=normalizeTraces(expt.t,expt.X,expt.normMethod,expt.normParam,doPlot);
         end
         
-        %detrend supports per-interval: for piecewise linear detrend.
-        function detrend(expt,method,methodPar,perSegment,flattenMethod,doPlot)
-            if ~exist('perSegment','var')
-                perSegment=true;
+        function setDetrendParameters(expt,method,methodPar,doPerSegment,flattenMethod)
+            expt.trendMethod=method;
+            expt.trendParam=methodPar;
+            expt.perSegment=doPerSegment;
+            expt.flattenMethod=flattenMethod;
+        end
+        
+        function setFilterParameters(expt,method,methodPar)
+            expt.filterMethod=method;
+            expt.filterParam=methodPar;
+        end
+        
+        
+        function preprocess(expt)
+            expt.normalize();
+            expt.detrend();
+            if expt.groupMode
+                expt.averageTraces();
             end
-            if ~exist('flattenMethod','var')
-                flattenMethod='none';
+            expt.filter();
+        end
+        
+        
+        function normalize(expt,method,methodPar)
+            if nargin>1
+            expt.normMethod=method;
+            expt.normParam=methodPar;
             end
-            if ~exist('doPlot','var')
-                doPlot=false;
+            expt.Xnorm=normalizeTraces(expt.t,expt.X,expt.normMethod,expt.normParam);
+        end
+        
+        
+        %detrend supports per-segment: for piecewise linear detrend.
+        function detrend(expt,method,methodPar,perSegment,flattenMethod)
+            
+            if nargin>1
+                expt.trendMethod=method;
+                expt.trendParam=methodPar;
+                expt.perSegment=perSegment;
+                expt.flattenMethod=flattenMethod;
             end
             
             if isempty(expt.Xnorm)
-                expt.Xnorm=expt.X;
-                expt.normMethod='none';
-                expt.normParam=[];
+                expt.normalize();
             end
-            
-            expt.trendMethod=method;
-            expt.trendParam=methodPar;
-            expt.perSegment=perSegment;
-            expt.flattenMethod=flattenMethod;
             
             if expt.perSegment
                 for i=1:expt.nS
                     thisIx=expt.segment(i).ix;
-                    [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),expt.trendMethod,expt.trendParam,doPlot);
+                    [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),expt.trendMethod,expt.trendParam);
                     
                     if ~(flattenMethod=="none")
                         %apply flattening. TODO: same for all segments? stitch
@@ -371,27 +391,12 @@ classdef Experiment < handle
                     expt.Xdetrend(thisIx,:)=Xdt;
                 end
                 
-                %TODO: this plots a figure for each segment. could suppress & make combined plot? Really need a full
-                %preprocessing helper function/plot...?
-%                 expt.plotTrace('detrend');
-                
             else
-                [expt.Xdetrend,expt.Xtrend]=detrendTraces(expt.t,expt.Xnorm,expt.trendMethod,expt.trendParam,doPlot);
+                [expt.Xdetrend,expt.Xtrend]=detrendTraces(expt.t,expt.Xnorm,expt.trendMethod,expt.trendParam);
             end
             
-            if expt.groupMode
-                expt.averageTraces();
-                expt.group=expt.groupID;
-                expt.include=expt.includeG;
-                expt.N=expt.nG;
-                expt.tix=expt.groupT(expt.tix);
-            else
-                expt.group=expt.groupT;
-                expt.include=expt.includeT;
-                expt.N=expt.nX;
-                expt.tix=find(expt.groupT==expt.tix,1,'first'); %alt: store trace/group ix separately
-            end
         end
+        
         
         function averageTraces(expt) 
             %TODO: handle edge case - all traces for a group excluded 
@@ -408,23 +413,20 @@ classdef Experiment < handle
 
         end
         
-        function filter(expt,method,methodPar,doPlot)
-            expt.filterMethod=method;
-            expt.filterParam=methodPar;
-            if ~exist('doPlot','var')
-                doPlot=false;
+        
+        function filter(expt,method,methodPar)
+            if nargin>1
+                expt.filterMethod=method;
+                expt.filterParam=methodPar;
             end
+            
             if isempty(expt.Xnorm)
-                expt.Xnorm=expt.X;
-                expt.normMethod='none';
-                expt.normParam=[];
+                expt.normalize();
             end
             if isempty(expt.Xdetrend)
-                expt.Xdetrend=expt.X;
-                expt.trendMethod='none';
-                expt.trendParam=[];
+                expt.detrend();
             end
-            expt.Xfilt=filterTraces(expt.t,expt.Xdetrend,expt.filterMethod,expt.filterParam,doPlot);
+            expt.Xfilt=filterTraces(expt.t,expt.Xdetrend,expt.filterMethod,expt.filterParam);
         end
         
         
@@ -433,6 +435,13 @@ classdef Experiment < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %TODO expand this - detect_periods return only points/fcns, then compute_features should apply fcn to relevant
         %traces.
+        
+        function setFeatureParameters(expt,method,methodpar,varargin)
+            expt.featureMethod=method;
+            expt.featureParam=methodpar;
+            expt.featureExtras=varargin;
+        end
+        
         function compute_features(expt,method,methodpar,varargin)
             if nargin>1
             expt.featureMethod=method;
@@ -443,7 +452,6 @@ classdef Experiment < handle
             expt.periodogram();
             expt.fnames_periods=fieldnames(expt.segment(1).features_periods)';
             expt.fnames_trace=fieldnames(expt.segment(1).features_trace)';
-            
             expt.buildResultsTable();
         end
         
@@ -608,19 +616,16 @@ classdef Experiment < handle
                 return
             end
             
-%             if isempty(expt.resfig)
-%                 expt.resfig=figure('Name',['Results: ',expt.filename]);
-%             else
-%                 figure(expt.resfig);
-%             end
-            
-            expt.resfig=gcf; %uses current figure, or creates one if no figs
-            expt.resfig.Name=['Result Table: ',expt.filename];
-            expt.resfig.NumberTitle='off';
-            
-            expt.resfig.KeyPressFcn=@expt.commonKeypress;
-%             expt.resfig.Interruptible='off';
-            expt.resfig.CloseRequestFcn=@expt.resfigCloseFcn;
+            if isempty(expt.resfig)
+                expt.resfig=gcf; %uses current figure, or creates one if no figs
+                expt.resfig.Name=['Result Table: ',expt.filename];
+                expt.resfig.NumberTitle='off';
+                expt.resfig.KeyPressFcn=@expt.commonKeypress;
+    %             expt.resfig.Interruptible='off';
+                expt.resfig.CloseRequestFcn=@expt.resfigCloseFcn;
+            else
+                figure(expt.resfig)
+            end
             
             colnames=[{'Trace'};{'Group'};{'Segment'};{'Include'};fieldnames(expt.segment(1).features_trace)];
 %             colnames=[{'Trace'};{'Segment'};{'Include'};fieldnames(expt.segment(1).features_trace)];
@@ -1133,30 +1138,42 @@ classdef Experiment < handle
                     expt.selectFeaturesPopup();
                     
                 case 'g'
+                    %pre-toggle actions
+                    if expt.groupMode
+                        expt.includeG=expt.include; %store include list
+%                         expt.ixG=expt.tix; %store last group ix
+                        expt.tix=find(expt.groupT==expt.tix,1,'first'); %determine new tix: first trace from currently in-focus group
+                    else
+                        expt.includeT=expt.include;
+%                         expt.ixT=expt.tix;
+                        expt.tix=expt.groupT(expt.tix); %determine new tix: group of currently in-focus trace 
+                    end
+                    
                     %toggle grouped mode
                     expt.groupMode=~expt.groupMode;
                     
-                    %needs full pipeline helper function
-                    expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
-                    expt.filter(expt.filterMethod,expt.filterParam,0);
+                    %post-toggle actions
+                    if expt.groupMode
+                        expt.group=expt.groupID;
+                        expt.include=expt.includeG;
+                        expt.N=expt.nG;
+                    else
+                        expt.group=expt.groupT;
+                        expt.include=expt.includeT;
+                        expt.N=expt.nX;
+                    end
+                    
+                    expt.preprocess();
                     expt.compute_features();
                     expt.updatePlots()
-                    figure(expt.resfig);
                     expt.displayResults();
                     
                 case 'i'
                     %toggle include
                     expt.include(expt.tix)=~expt.include(expt.tix);
-                    if expt.groupMode
-                        expt.includeG=expt.include;
-                    else
-                        expt.includeT=expt.include;
-                    end
                     
-                    %needs full pipeline helper function
-                    expt.compute_features();
                     expt.updatePlots('feature')
-                    figure(expt.resfig);
+                    expt.buildResultsTable();
                     expt.displayResults();
                     
                 case 'p'
@@ -1272,7 +1289,6 @@ classdef Experiment < handle
                 elseif cbdata.Indices(2)==2
                     expt.yfeature=cbdata.EditData;
                 end
-%                 expt.updatePlots('feature')
             end
 
         end
@@ -1311,12 +1327,9 @@ classdef Experiment < handle
                 end
                 
                 if doUpdate==true
-                    %needs full pipeline helper function
-                    expt.detrend(expt.trendMethod,expt.trendParam,expt.perSegment,expt.flattenMethod,0);
-                    expt.filter(expt.filterMethod,expt.filterParam,0);
+                    expt.preprocess();
                     expt.compute_features();
                     expt.updatePlots()
-                    figure(expt.resfig);
                     expt.displayResults();
                 end
             end
