@@ -297,6 +297,11 @@ classdef Experiment < handle
         function excludeTraces(expt,excludeIx)
             %TODO: groupMode sensitive?
             expt.includeT(excludeIx)=false;
+            if expt.groupMode
+                expt.include=expt.includeG;
+            else
+                expt.include=expt.includeT;
+            end
         end
         
         
@@ -403,7 +408,7 @@ classdef Experiment < handle
             
             XDTg=zeros(length(expt.t),expt.nG);
             for j=1:expt.nG  
-                XDTg(:,j)=mean(expt.Xdetrend(:,expt.group==expt.groupID(j) & expt.include),2);  
+                XDTg(:,j)=mean(expt.Xdetrend(:,expt.groupT==expt.groupID(j) & expt.includeT),2);  
             end
 %             emptygroup=isnan(XDTg(1,:));
 %             XDTg(:,emptygroup)=[]; %remove any groups with no members
@@ -500,6 +505,7 @@ classdef Experiment < handle
                 subplot(nPlots,1,i)
                 expt.plot_t(whichPlot{i},showPts)
             end
+            expt.active_fig=gcf;
         end
         
         function plotPeriodogram(expt,tix,doInteractive)
@@ -528,7 +534,7 @@ classdef Experiment < handle
             end
             
             expt.plot_psd();
-            
+            expt.active_fig=gcf;
             end
         end
         
@@ -597,6 +603,7 @@ classdef Experiment < handle
                 case 'per-trace'
                     expt.plot_features_trace();
             end
+            expt.active_fig=gcf;
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -635,7 +642,7 @@ classdef Experiment < handle
 %             coledit(3)=true; 
             %needs a callback function to link edited values to expt.include
             
-            uit=uitable(expt.resfig,'Data',expt.resultsTrace{:,:});
+            uit=uitable(expt.resfig,'Data',expt.resultsTrace{:,:},'tag','oscar_resultsTable');
             uit.ColumnName=colnames;
 %             uit.ColumnFormat=colformat;
 %             uit.ColumnEditable=coledit;
@@ -643,6 +650,8 @@ classdef Experiment < handle
             uit.Units='normalized';
             uit.Position=[0.025,0.025,0.95,0.95];
             
+            figure(expt.resfig) %bring focus back to figure (for keypressfcn)
+            figure(expt.active_fig) %bring focus back to active figure
         end
         
 %         function displayResultsKeypress
@@ -798,27 +807,29 @@ classdef Experiment < handle
                     
                 case {'n','norm','normalize','normalized'}
                     x=expt.Xnorm(:,expt.tix);
-%                     x2=expt.Xtrend(:,expt.tix);
+                    x2=expt.Xtrend(:,expt.tix);
 
                 case {'t','trend','trendline'}
                     x=expt.Xtrend(:,expt.tix);
                     
                 case {'d','detrend','detrended'}
                     x=expt.Xdetrend(:,expt.tix);
-%                     x2=expt.Xfilt(:,expt.tix);
+                    x2=expt.Xfilt(:,expt.tix);
+                    line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
                     
                 case {'f','filt','filter','filtered'}
                     x=expt.Xfilt(:,expt.tix);
+                    line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
                     points_option='all';
                     
                 otherwise
                     error([whichPlot, ' is not a supported trace type for plotting']);
             end
             
-            line(expt.t,x,'color','k','tag','oscar_line')
             if ~isempty(x2)
                 line(expt.t,x2,'tag','oscar_line')
             end
+            line(expt.t,x,'color','k','tag','oscar_line')
             
             
             %slower, but benefit of encapsulating special point plots in
@@ -1178,7 +1189,7 @@ classdef Experiment < handle
                     
                 case 'p'
                     %parameter dialog
-                    doUpdate=expt.parameterDialog();
+                    expt.parameterDialog();
                     %needs full pipeline helper function
                     
                 case 's'
@@ -1294,7 +1305,7 @@ classdef Experiment < handle
         end
         
        
-        function doUpdate=parameterDialog(expt)
+        function parameterDialog(expt)
             prompt = {'Detrend:','Filter:','Threshold:'};
             title = 'Enter parameter values';
             dims = [1,50];

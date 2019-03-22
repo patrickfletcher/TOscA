@@ -212,7 +212,7 @@ end
 
 nX=size(X,2);
 
-Fdist=repmat( struct('period',0,'apd',0,'spd',0,'pf',0,'amp',[],...
+Fdist=repmat( struct('period',0,'apd',0,'spd',0,'pf',0,'f1',0,'f2',0,'f3',0,'f4',0,'amp',[],...
     'baseline',[],'peaks',[],'maxslope',0,'minslope',0) ,1,nX); %'range',[],'thrUp',[],'thrDown',[],'pthresh',[]
 
 for i=1:nX
@@ -269,6 +269,10 @@ for i=1:nX
         Fdist(i).apd=points(i).down.t-points(i).up.t(1:end-1); %active phase duration
         Fdist(i).spd=Fdist(i).period-Fdist(i).apd;
         Fdist(i).pf=Fdist(i).apd./Fdist(i).period;
+        Fdist(i).f1=(points(i).max.t-points(i).up.t(1:end-1))./Fdist(i).period; %up2max time
+        Fdist(i).f2=(points(i).down.t-points(i).max.t)./Fdist(i).period; %max2down time
+        Fdist(i).f3=(points(i).min.t-points(i).down.t)./Fdist(i).period; %down2min time
+        Fdist(i).f4=(points(i).up.t(2:end)-points(i).min.t)./Fdist(i).period; %min2up time
         Fdist(i).baseline=points(i).min.x;
         Fdist(i).peaks=points(i).max.x;
         Fdist(i).amp=points(i).max.x-points(i).min.x;
