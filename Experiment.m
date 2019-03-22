@@ -800,14 +800,18 @@ classdef Experiment < handle
             delete(findobj(ax,'tag','oscar_line'));
             
             points_option='period';
-            x2=[];
+            x=[];x2=[];
             switch whichPlot
                 case {'r','raw'}
-                    x=expt.X(:,expt.tix);
+                    if ~expt.groupMode
+                        x=expt.X(:,expt.tix);
+                    end
                     
                 case {'n','norm','normalize','normalized'}
-                    x=expt.Xnorm(:,expt.tix);
-                    x2=expt.Xtrend(:,expt.tix);
+                    if ~expt.groupMode
+                        x=expt.Xnorm(:,expt.tix);
+                        x2=expt.Xtrend(:,expt.tix);
+                    end
 
                 case {'t','trend','trendline'}
                     x=expt.Xtrend(:,expt.tix);
@@ -829,61 +833,63 @@ classdef Experiment < handle
             if ~isempty(x2)
                 line(expt.t,x2,'tag','oscar_line')
             end
-            line(expt.t,x,'color','k','tag','oscar_line')
             
-            
-            %slower, but benefit of encapsulating special point plots in
-            %detector code
-%             plotTrace=false;
-%             for i=1:expt.nS
-%                 tt=expt.t(expt.segment(i).ix);
-%                 xx=x(expt.segment(i).ix);
-%                 pts=expt.segment(i).points(expt.tix);
-%                 pts.period.x=interp1(tt,xx,pts.period.t); %interp x value of period markers
-%                 
-%                 expt.segment(i).plot(tt,xx,pts,1,plotTrace,points_option);
-%             end
+            if ~isempty(x)
+                line(expt.t,x,'color','k','tag','oscar_line')
 
-            if showPts
-                for i=1:expt.nS
-                    tt=expt.t(expt.segment(i).ix);
-                    xx=x(expt.segment(i).ix);
-                    pts=expt.segment(i).points(expt.tix);
-                    
-                    if length(pts.period.t)>1
-                        
-                    if points_option=="all"
-                        line(pts.min.t,pts.min.x,'color','r','marker','^','linestyle','none','tag','oscar_line')
-                        line(pts.max.t,pts.max.x,'color','r','marker','v','linestyle','none','tag','oscar_line')
-                        line(pts.dxmin.t,pts.dxmin.x,'color','g','marker','<','linestyle','none','tag','oscar_line')
-                        line(pts.dxmax.t,pts.dxmax.x,'color','g','marker','>','linestyle','none','tag','oscar_line')
-                        line(pts.up.t,pts.up.x,'color','b','marker','d','linestyle','none','tag','oscar_line')
-                        line(pts.down.t,pts.down.x,'color','b','marker','o','linestyle','none','tag','oscar_line')
-                        
-%                         tupdwn=[pts.up.t(1:length(pts.down.t)); pts.down.t];
-%                         ythresh=[1;1]*expt.segment(i).features(expt.tix).pthresh;
-%                         plot(ax,tupdwn,ythresh,'b-')
-                    else
-                    
-                        xPer=interp1(tt,xx,pts.period.t); %this is necessary except for filt
-                        line(pts.period.t,xPer,'color','b','marker','s','linestyle','none','tag','oscar_line')
 
-                    end
-                    
+                %slower, but benefit of encapsulating special point plots in
+                %detector code
+    %             plotTrace=false;
+    %             for i=1:expt.nS
+    %                 tt=expt.t(expt.segment(i).ix);
+    %                 xx=x(expt.segment(i).ix);
+    %                 pts=expt.segment(i).points(expt.tix);
+    %                 pts.period.x=interp1(tt,xx,pts.period.t); %interp x value of period markers
+    %                 
+    %                 expt.segment(i).plot(tt,xx,pts,1,plotTrace,points_option);
+    %             end
+
+                if showPts
+                    for i=1:expt.nS
+                        tt=expt.t(expt.segment(i).ix);
+                        xx=x(expt.segment(i).ix);
+                        pts=expt.segment(i).points(expt.tix);
+
+                        if length(pts.period.t)>1
+
+                        if points_option=="all"
+                            line(pts.min.t,pts.min.x,'color','r','marker','^','linestyle','none','tag','oscar_line')
+                            line(pts.max.t,pts.max.x,'color','r','marker','v','linestyle','none','tag','oscar_line')
+                            line(pts.dxmin.t,pts.dxmin.x,'color','g','marker','<','linestyle','none','tag','oscar_line')
+                            line(pts.dxmax.t,pts.dxmax.x,'color','g','marker','>','linestyle','none','tag','oscar_line')
+                            line(pts.up.t,pts.up.x,'color','b','marker','d','linestyle','none','tag','oscar_line')
+                            line(pts.down.t,pts.down.x,'color','b','marker','o','linestyle','none','tag','oscar_line')
+
+    %                         tupdwn=[pts.up.t(1:length(pts.down.t)); pts.down.t];
+    %                         ythresh=[1;1]*expt.segment(i).features(expt.tix).pthresh;
+    %                         plot(ax,tupdwn,ythresh,'b-')
+                        else
+
+                            xPer=interp1(tt,xx,pts.period.t); %this is necessary except for filt
+                            line(pts.period.t,xPer,'color','b','marker','s','linestyle','none','tag','oscar_line')
+
+                        end
+
+                        end
                     end
                 end
+
+    %             axis tight
+                xlabel('t')
+                ylabel(['X_{',whichPlot,'}',num2str(expt.tix)])
+    %             YLIM=ylim();
+    %             ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
+
+                for i=2:expt.nS
+                    line(expt.segment(i).endpoints(1)*[1,1],ylim(),'color','g','tag','oscar_line')
+                end
             end
-            
-%             axis tight
-            xlabel('t')
-            ylabel(['X_{',whichPlot,'}',num2str(expt.tix)])
-%             YLIM=ylim();
-%             ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
-            
-            for i=2:expt.nS
-                line(expt.segment(i).endpoints(1)*[1,1],ylim(),'color','g','tag','oscar_line')
-            end
-            
         end
         
         function plot_psd(expt)
