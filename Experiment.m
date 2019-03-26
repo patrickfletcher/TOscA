@@ -68,7 +68,8 @@ classdef Experiment < handle
         nX
         includeT %place to store trace-wise include vector
         
-        groupT 
+        traceID %from original file
+        groupT
         groupID
         nG
         includeG %groupwise include vector
@@ -717,6 +718,14 @@ classdef Experiment < handle
 %             expt.updatePlots();
 %         end
         
+        function clearFigs(expt)
+            %need better way to keep track of all figs registered?
+            expt.resfig=[];
+            expt.active_fig=[];
+            expt.fig_handles=[];
+            expt.featureSelectDlg=[];
+        end
+
     end
     
     methods (Access=private)
@@ -801,28 +810,32 @@ classdef Experiment < handle
             
             points_option='period';
             x=[];x2=[];
+            thisG=expt.group(expt.tix);
+            ix2plot=expt.group==thisG;
+            gixlist=find(ix2plot);
+            gix=find(gixlist==expt.tix);
             switch whichPlot
                 case {'r','raw'}
                     if ~expt.groupMode
-                        x=expt.X(:,expt.tix);
+                        x=expt.X(:,ix2plot);
                     end
                     
                 case {'n','norm','normalize','normalized'}
                     if ~expt.groupMode
-                        x=expt.Xnorm(:,expt.tix);
+                        x=expt.Xnorm(:,ix2plot);
                         x2=expt.Xtrend(:,expt.tix);
                     end
 
                 case {'t','trend','trendline'}
-                    x=expt.Xtrend(:,expt.tix);
+                    x=expt.Xtrend(:,ix2plot);
                     
                 case {'d','detrend','detrended'}
-                    x=expt.Xdetrend(:,expt.tix);
+                    x=expt.Xdetrend(:,ix2plot);
                     x2=expt.Xfilt(:,expt.tix);
                     line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
                     
                 case {'f','filt','filter','filtered'}
-                    x=expt.Xfilt(:,expt.tix);
+                    x=expt.Xfilt(:,ix2plot);
                     line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
                     points_option='all';
                     
@@ -830,14 +843,17 @@ classdef Experiment < handle
                     error([whichPlot, ' is not a supported trace type for plotting']);
             end
             
-            if ~isempty(x2)
-                line(expt.t,x2,'tag','oscar_line')
-            end
             
             if ~isempty(x)
-                line(expt.t,x,'color','k','tag','oscar_line')
+                hl=line(expt.t,x,zeros(size(expt.t)),'color',[0.75,0.75,0.75],'tag','oscar_line');
 
-
+                if ~isempty(x2)
+                    line(expt.t,x2,'tag','oscar_line')
+                end
+                
+                hl(gix).Color='k';
+                hl(gix).ZData=2*ones(size(hl(gix).ZData));
+                    
                 %slower, but benefit of encapsulating special point plots in
                 %detector code
     %             plotTrace=false;
@@ -853,7 +869,7 @@ classdef Experiment < handle
                 if showPts
                     for i=1:expt.nS
                         tt=expt.t(expt.segment(i).ix);
-                        xx=x(expt.segment(i).ix);
+                        xx=x(expt.segment(i).ix,gix);
                         pts=expt.segment(i).points(expt.tix);
 
                         if length(pts.period.t)>1

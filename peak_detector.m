@@ -27,6 +27,8 @@ function [F,Fdist,points,fcns]=peak_detector(t, X, varargin)
 %check inputs and parse optional parameters
 % [thrPtiles,delta,doPlot,figID,dokeypress]=parseArgs(t, X, varargin{:});
 
+%TODO: try https://stackoverflow.com/questions/22583391/peak-signal-detection-in-realtime-timeseries-data
+
 %TODO: input name-value support
 %TODO: verify best initialization of maxIsNext toggle
 %TODO: interpolate peaks/troughs?

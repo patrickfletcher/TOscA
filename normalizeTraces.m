@@ -9,7 +9,6 @@ function XNorm=normalizeTraces(t,X,method,methodparam,doPlot)
 %                interval [0,1]. Optional param: [a,b] to set range other than [0,1].
 %
 %     'devmean' - (X-mean(X))/mean(X) 
-%
 
 % TODO: finish error checking, documentation
 
