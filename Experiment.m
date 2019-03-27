@@ -1,4 +1,4 @@
-classdef Experiment < handle
+classdef Experiment < handle & matlab.mixin.Copyable
     %class to represent a single experiment containing >=1 timeseries that share the same time sample points. For
     %example, a fluorescence videomicroscopy experiment with multiple ROIs in a field of view. 
 
@@ -63,6 +63,7 @@ classdef Experiment < handle
         fs %1/dt
         f
         psd
+        psdFilt
         
         X
         nX
@@ -724,10 +725,10 @@ classdef Experiment < handle
         
         function clearFigs(expt)
             %need better way to keep track of all figs registered?
-            expt.resfig=[];
-            expt.active_fig=[];
-            expt.fig_handles=[];
-            expt.featureSelectDlg=[];
+            expt.resfig=matlab.ui.Figure.empty;
+            expt.active_fig=matlab.ui.Figure.empty;
+            expt.fig_handles=matlab.ui.Figure.empty;
+            expt.featureSelectDlg=matlab.ui.Figure.empty;
         end
 
     end
@@ -773,7 +774,6 @@ classdef Experiment < handle
             for i=1:expt.nS
                 thisIx=expt.segment(i).ix;
                 [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xdetrend(thisIx,:),expt.fs);
-%                 [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
                 Tpsd=1./fmax;
                 
                 expt.psd=zeros([size(PSD),expt.nS]);
@@ -799,6 +799,10 @@ classdef Experiment < handle
                 [expt.segment(i).features_trace.fmax]=fmax{:};
                 [expt.segment(i).features_trace.Pmax]=Pmax{:};
                 [expt.segment(i).features_trace.Rp21]=Rp21{:};
+                
+                [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
+                expt.psdFilt=zeros([size(PSD),expt.nS]);
+                expt.psdFilt(:,:,i)=PSD;
             end
             expt.f=F; %frquency vector
         end
@@ -921,14 +925,25 @@ classdef Experiment < handle
             delete(findobj(ax,'tag','oscar_line'));
             
             for i=1:expt.nS
-                line(expt.f,expt.psd(:,expt.tix,i),'tag','oscar_line'); 
+                subplot(expt.nS,1,i)
+%                 line(expt.f,expt.psd(:,expt.tix,i),'tag','oscar_line'); 
+                line(expt.f,[expt.psd(:,expt.tix,i),expt.psdFilt(:,expt.tix,i)],'tag','oscar_line'); 
+                legend({'detrended','filtered'},'AutoUpdate','off')
+                title(expt.segment(i).name)
             end     
-            xlabel('frequency')         
+            xlabel('frequency')
             ylabel('power');
             axis tight
-            if expt.nS>1
-                legend({expt.segment.name},'AutoUpdate','off')
-            end
+            
+            for i=1:expt.nS
+                subplot(expt.nS,1,i)
+                x=expt.segment(i).features_trace(expt.tix).fmax;
+                y=expt.segment(i).features_trace(expt.tix).Pmax;
+                line(x,y,'color','r','marker','v','tag','oscar_line'); 
+            end     
+            maxFilt=max(expt.psdFilt(:,expt.tix,i));
+            UB=expt.f(find(expt.psdFilt(:,expt.tix,i)>0.0025*maxFilt,1,'last'));
+            xlim([0,UB]);
         end
         
         function plot_features_periods(expt)
