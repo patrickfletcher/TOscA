@@ -245,20 +245,18 @@ classdef Experiment < handle
             expt.X=XI;
             
             expt.nX=size(expt.X,2);
+            expt.traceID=1:expt.nX;
             
             expt.dt=DT;
             expt.fs=1/expt.dt;
             
             %default segment = whole trace
             expt.defineSegments({'1'},[ti(1),ti(end)]);
-            expt.setGroup(ones(1,expt.nX));
             expt.includeT=true(1,expt.nX);
             
+            expt.setGroup(ones(1,expt.nX));
+            
             expt.tix=1;
-            %groupMode default is false
-            expt.group=expt.groupT; 
-            expt.include=expt.includeT;
-            expt.N=expt.nX;
              
         end
         
@@ -278,6 +276,12 @@ classdef Experiment < handle
         end
         
         function setGroup(expt,groupvar)
+            
+            [groupvar,ixs]=sort(groupvar);
+            expt.traceID=expt.traceID(ixs);
+            expt.X=expt.X(:,ixs);
+            expt.includeT=expt.includeT(ixs);
+            
             expt.groupT=groupvar;
             expt.groupID=unique(groupvar);
             expt.nG=length(expt.groupID);
@@ -297,7 +301,7 @@ classdef Experiment < handle
         
         function excludeTraces(expt,excludeIx)
             %TODO: groupMode sensitive?
-            expt.includeT(excludeIx)=false;
+            expt.includeT(ismember(expt.traceID,excludeIx))=false;
             if expt.groupMode
                 expt.include=expt.includeG;
             else
@@ -739,6 +743,8 @@ classdef Experiment < handle
 %             expt.featureParam=methodpar;
 %             expt.featureExtras=varargin{:};
             
+            %TODO: per-segment toggle
+
             extras=expt.featureExtras;
             for i=1:expt.nS
                 thisIx=expt.segment(i).ix;
