@@ -3,6 +3,8 @@ classdef Experiment < handle & matlab.mixin.Copyable
     %example, a fluorescence videomicroscopy experiment with multiple ROIs in a field of view. 
 
     
+    %TODO: Force user to load data into Matlab? data=[t,X];
+    
     %TODO: make parameterDialog a regular figure with "go" button, like
     %selectFeaturesPopup
     
@@ -495,7 +497,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
             %interactive figure: set up callbacks
             if doInteractive
                 figID=gcf;
-                figID.Name=['Traces: ',expt.filename];
+                figID.Name=strcat('Traces: ',expt.filename);
                 figID.NumberTitle='off';
                 if ~ismember(figID,expt.fig_handles)
                     expt.fig_handles(end+1)=figID; %register the new fig with expt
@@ -528,7 +530,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
                       
             if doInteractive
                 figID=gcf;
-                figID.Name=['Periodogram: ',expt.filename];
+                figID.Name=strcat('Periodogram: ',expt.filename);
                 figID.NumberTitle='off';
                 if ~ismember(figID,expt.fig_handles)
                     expt.fig_handles(end+1)=figID; %register the new fig with expt
@@ -592,7 +594,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
             %interactive figure: set up callbacks
             if doInteractive
                 figID=gcf;
-                figID.Name=['Features: ',expt.filename];
+                figID.Name=strcat('Features: ',expt.filename);
                 figID.NumberTitle='off';
                 figID.KeyPressFcn=@expt.commonKeypress;
 %                 figID.Interruptible='off';
@@ -631,7 +633,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
             
             if isempty(expt.resfig)
                 expt.resfig=gcf; %uses current figure, or creates one if no figs
-                expt.resfig.Name=['Result Table: ',expt.filename];
+                expt.resfig.Name=strcat('Result Table: ',expt.filename);
                 expt.resfig.NumberTitle='off';
                 expt.resfig.KeyPressFcn=@expt.commonKeypress;
     %             expt.resfig.Interruptible='off';
@@ -919,7 +921,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
         end
         
         function plot_psd(expt)
-            
+            %BUG - per-axis isn't resetting when more than one segment
             ax=gca;
             reset(ax)
             delete(findobj(ax,'tag','oscar_line'));

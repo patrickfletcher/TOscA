@@ -77,7 +77,7 @@ switch lower(threshMethod)
         thrDown=fracDown;
         
     case 'meanfrac'
-        %median +/- fraction of amp
+        %mean +/- fraction of amp
         meanX=mean(X,1);
         thrUp=meanX + fracUp*globalXamp;
         thrDown=meanX - fracDown*globalXamp;
