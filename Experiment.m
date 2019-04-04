@@ -267,12 +267,12 @@ classdef Experiment < handle & matlab.mixin.Copyable
         % Setup helper functions
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function defineSegments(expt,names,startTimes)
-            %expects names as cell array, times as vector
+            %expects names as string array, times as vector
             expt.nS=length(names);
-%             expt.segment(expt.nS).name=''; %expand the array of struct
+            
             startTimes(end+1)=expt.t(end); %append final time
             for i=1:expt.nS
-                expt.segment(i).name=names{i};
+                expt.segment(i).name=names(i);
                 expt.segment(i).endpoints=[startTimes(i),startTimes(i+1)];
                 expt.segment(i).ix=expt.t>=startTimes(i) & expt.t<=startTimes(i+1);
             end
@@ -373,11 +373,13 @@ classdef Experiment < handle & matlab.mixin.Copyable
                     thisIx=expt.segment(i).ix;
                     [Xdt,Xt]=detrendTraces(expt.t(thisIx),expt.Xnorm(thisIx,:),expt.trendMethod,expt.trendParam);
                     
-                    if ~(flattenMethod=="none")
-                        %apply flattening. TODO: same for all segments? stitch
-                        %last values??
-                        if i==1 
-                            switch flattenMethod
+                    if ~(expt.flattenMethod=="none")
+                        %apply flattening.
+                        if i==1
+                            last=Xdt(1,:);
+                        end
+%                         if i==1 
+                            switch expt.flattenMethod
                                 case 'mean'
                                     addVal=mean(expt.Xnorm(thisIx,:),1);
                                 case 'median'
@@ -390,12 +392,14 @@ classdef Experiment < handle & matlab.mixin.Copyable
                                     addVal=median(Xt,1);
                                 case 'firstTrend'
                                     addVal=Xt(1,:);
+                                case 'continuous'
+                                    addVal=last-Xdt(1,:); %makes the trace continuous
                                 otherwise
-                                    error(['Unknown flatten method: ', flattenMethod])
+                                    error(['Unknown flatten method: ', expt.flattenMethod])
                             end
-                        else
-                            addVal=last-Xdt(1,:); %makes the trace continuous
-                        end
+%                         else
+%                             addVal=last-Xdt(1,:); %makes the trace continuous
+%                         end
                         Xdt=Xdt+addVal;
                         last=Xdt(end,:);
                     end
@@ -775,7 +779,9 @@ classdef Experiment < handle & matlab.mixin.Copyable
         function periodogram(expt)
             for i=1:expt.nS
                 thisIx=expt.segment(i).ix;
-                [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xdetrend(thisIx,:),expt.fs);
+                DT=expt.Xdetrend(thisIx,:);
+                DT=DT-mean(DT,1);
+                [PSD,F,Pmax,fmax]=powerSpectrum(DT,expt.fs);
                 Tpsd=1./fmax;
                 
                 expt.psd=zeros([size(PSD),expt.nS]);
@@ -802,7 +808,9 @@ classdef Experiment < handle & matlab.mixin.Copyable
                 [expt.segment(i).features_trace.Pmax]=Pmax{:};
                 [expt.segment(i).features_trace.Rp21]=Rp21{:};
                 
-                [PSD,F,Pmax,fmax]=powerSpectrum(expt.Xfilt(thisIx,:),expt.fs);
+                DTF=expt.Xdetrend(thisIx,:);
+                DTF=DTF-mean(DTF,1);
+                [PSD,F,Pmax,fmax]=powerSpectrum(DTF,expt.fs);
                 expt.psdFilt=zeros([size(PSD),expt.nS]);
                 expt.psdFilt(:,:,i)=PSD;
             end
@@ -981,10 +989,11 @@ classdef Experiment < handle & matlab.mixin.Copyable
                     case {'segment'}
                         %TODO: option for violin plot, boxplot?
                         x=i+xJitter*randn(1,length(y));
+%                         colorBySegment=true;
 
                     case expt.fnames_periods
                         x=expt.segment(i).features_periods(expt.tix).(expt.xfeature);
-                        colorBySegment=true;
+%                         colorBySegment=true;
 
                     otherwise
                         error(['Invalid name for x-axis: ' expt.xfeature])
@@ -1000,23 +1009,23 @@ classdef Experiment < handle & matlab.mixin.Copyable
             end
                           
             
-            ax.ColorOrderIndex=1;  
             hl=matlab.graphics.chart.primitive.Line.empty(expt.nS,0);
             for i=1:expt.nS
+                col=ax.ColorOrder(mod(i-1,length(ax.ColorOrder(:,1)))+1,:);
                 if ~isempty(XX{i})
-                    hl(i,1)=line(XX{i},YY{i},'marker','o','linestyle','none','tag','oscar_line');
+                    hl(i,1)=line(XX{i},YY{i},'marker','o','linestyle','none','color',col,'tag','oscar_line');
                 end
             end
-            if colorBySegment
-                legend(hl,{expt.segment.name},'AutoUpdate','off') %TODO: option to suppress legend?
-            else
-                legend('off')
-                for i=1:expt.nS
-                    if ~isempty(XX{i})
-                        hl(i).Color='k';
-                    end
-                end
-            end
+%             if colorBySegment
+                legend(hl,[expt.segment(:).name],'AutoUpdate','off') %TODO: option to suppress legend?
+%             else
+%                 legend('off')
+%                 for i=1:expt.nS
+%                     if ~isempty(XX{i})
+%                         hl(i).Color='k';
+%                     end
+%                 end
+%             end
             
             axis tight
             
@@ -1036,7 +1045,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
                         
                     case {'segment'} %TODO: do jitter here?
                         xticks(1:expt.nS)
-                        xticklabels({expt.segment.name})
+%                         xticklabels({expt.segment.name})
                         xlim([0.5,expt.nS+0.5])
             end
             
@@ -1083,6 +1092,11 @@ classdef Experiment < handle & matlab.mixin.Copyable
 
             end
             
+            if expt.N==1 %dummy trace to make coloring by segment work when only one trace
+                XX=[XX,nan(size(XX))];
+                YY=[YY,nan(size(YY))];
+            end
+            
             %line segment below markers:
             if expt.nS>1
                 line(XX,YY,'color',[0.5,0.5,0.5],'linestyle','-','tag','oscar_line');
@@ -1100,16 +1114,25 @@ classdef Experiment < handle & matlab.mixin.Copyable
                     'color',hmAll(i).Color,'markerfacecolor',hmAll(i).Color,'tag','oscar_line');
             end
             
+%             for i=1:expt.nS
+%                 ax.ColorOrderIndex=i;
+%                 hm=line(XX(i),YY(i),'marker','o','linestyle','none','tag','oscar_line');
+%                 line(HX(i),HY(i),'marker','o','linestyle','none',...
+%                     'color',hm.Color,'markerfacecolor',hm.Color,'tag','oscar_line');
+%                 hmAll(i)=hm;
+%             end
+%             axis tight
+            
             line(XX(~expt.include)',YY(~expt.include)','color','k',...
                 'linestyle','none','marker','x','tag','oscar_line');
             
             if expt.nS>1
-                legend(hmAll,{expt.segment.name},'AutoUpdate','off')
+                legend(hmAll,[expt.segment(:).name],'AutoUpdate','off')
             end
             
             if expt.xfeature=="segment"
                 xticks(1:expt.nS)
-                xticklabels({expt.segment.name})
+%                 xticklabels({expt.segment.name})
                 xlim([0.5,expt.nS+0.5])
             end
             
