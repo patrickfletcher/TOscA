@@ -158,8 +158,8 @@ end
 
 nX=size(X,2);
 
-Fdist=repmat( struct('period',0,'apd',0,'spd',0,'pf',0,'amp',[],...
-    'baseline',[],'peaks',[],'maxslope',0,'minslope',0,'pthresh',[]) ,1,nX); %'range',[],'thrUp',[],'thrDown',[]
+Fdist=repmat( struct('period',0,'apd',0,'spd',0,'pf',0,'amp',0,...
+    'baseline',0,'peaks',0,'maxslope',0,'minslope',0,'pthresh',[]) ,1,nX); %'range',[],'thrUp',[],'thrDown',[]
 
 for i=1:nX
     
