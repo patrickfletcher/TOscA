@@ -501,7 +501,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
             %interactive figure: set up callbacks
             if doInteractive
                 figID=gcf;
-                figID.Name=strcat('Traces: ',expt.filename);
+                figID.Name=strcat('Traces: ',expt.name);
                 figID.NumberTitle='off';
                 if ~ismember(figID,expt.fig_handles)
                     expt.fig_handles(end+1)=figID; %register the new fig with expt
