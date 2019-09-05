@@ -119,7 +119,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
         averageMethod='arithmetic'
         averageParam=[]
         
-        featureMethod='threshold'
+        featureMethod='none'
         featureParam={}
         featureExtras={}
         
@@ -279,7 +279,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
         end
         
         function setGroup(expt,groupvar)
-            
+            groupvar=groupvar(:)';%row vector
             [groupvar,ixs]=sort(groupvar);
             expt.traceID=expt.traceID(ixs);
             expt.X=expt.X(:,ixs);
@@ -465,11 +465,13 @@ classdef Experiment < handle & matlab.mixin.Copyable
             expt.featureParam=methodpar;
             expt.featureExtras=varargin;
             end
+            if ~strcmp(expt.featureMethod,'none')
             expt.detect_periods();
             expt.periodogram();
             expt.fnames_periods=fieldnames(expt.segment(1).features_periods)';
             expt.fnames_trace=fieldnames(expt.segment(1).features_trace)';
             expt.buildResultsTable();
+            end
         end
         
         
@@ -631,7 +633,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
             %  export?
             
             if isempty(expt.resultsTrace)
-                warning('results table is empty, nothing to do')
+%                 warning('results table is empty, nothing to do')
                 return
             end
             
@@ -852,11 +854,11 @@ classdef Experiment < handle & matlab.mixin.Copyable
                 case {'d','detrend','detrended'}
                     x=expt.Xdetrend(:,ix2plot);
                     x2=expt.Xfilt(:,expt.tix);
-                    line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
+%                     line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
                     
                 case {'f','filt','filter','filtered'}
                     x=expt.Xfilt(:,ix2plot);
-                    line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
+%                     line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
                     points_option='all';
                     
                 otherwise
