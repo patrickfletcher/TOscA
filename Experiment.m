@@ -214,22 +214,24 @@ classdef Experiment < handle & matlab.mixin.Copyable
             rowIsNan=any(isnan(Xraw),2);
             if any(rowIsNan)
                 expt.notes=[expt.notes,{'some rows have NaN'}];
-                r=find(rowIsNan);
-
-                if r(1)==1
-                    time=time(2:end,1);
-                    Xraw=Xraw(2:end,:);
-                    r=r(2:end)-1;
-                end
-                for ii=1:length(r)
-                    for jj=1:size(Xraw,2)
-                        iix=[r(ii)-1,r(ii)+1];
-                        x=time(iix,1);
-                        v=Xraw(iix,jj);
-                        xq=time(r(ii),1);
-                        Xraw(r(ii),jj)=interp1(x,v,xq,expt.interpMethod);
-                    end
-                end
+                time(rowIsNan)=[];
+                Xraw(rowIsNan,:)=[]; %delete the NaN containing rows
+                
+%                 r=find(rowIsNan);
+%                 if r(1)==1
+%                     time=time(2:end,1);
+%                     Xraw=Xraw(2:end,:);
+%                     r=r(2:end)-1;
+%                 end
+%                 for ii=1:length(r) %interpolate the missing values
+%                     for jj=1:size(Xraw,2) 
+%                         iix=[r(ii)-1,r(ii)+1];
+%                         x=time(iix,1);
+%                         v=Xraw(iix,jj);
+%                         xq=time(r(ii),1);
+%                         Xraw(r(ii),jj)=interp1(x,v,xq,expt.interpMethod);
+%                     end
+%                 end
             end
 %             expt.t=time;
 %             expt.X=Xraw;
@@ -845,7 +847,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
                 case {'n','norm','normalize','normalized'}
                     if ~expt.groupMode
                         x=expt.Xnorm(:,ix2plot);
-                        x2=expt.Xtrend(:,expt.tix);
+                        if ~isempty(expt.Xtrend), x2=expt.Xtrend(:,expt.tix); end
                     end
 
                 case {'t','trend','trendline'}
@@ -853,7 +855,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
                     
                 case {'d','detrend','detrended'}
                     x=expt.Xdetrend(:,ix2plot);
-                    x2=expt.Xfilt(:,expt.tix);
+                    if ~isempty(expt.Xfilt), x2=expt.Xfilt(:,expt.tix); end
 %                     line([min(expt.t),max(expt.t)],[0,0],'color','k','linestyle','--','tag','oscar_line')
                     
                 case {'f','filt','filter','filtered'}
