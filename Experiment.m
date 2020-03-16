@@ -925,7 +925,7 @@ classdef Experiment < handle & matlab.mixin.Copyable
     %             ylim([YLIM(1)-0.05*abs(YLIM(1)),YLIM(2)+0.05*abs(YLIM(2))]);
 
                 for i=2:expt.nS
-                    line(expt.segment(i).endpoints(1)*[1,1],ylim(),'color','g','tag','oscar_line')
+                    line(expt.segment(i).endpoints(1)*[1,1],ylim(),'color','g','tag','seg_line')
                 end
             end
         end
